@@ -9,25 +9,19 @@ impl Bitboard {
     pub fn print(&self) {
         print!("  a b c d e f g h");
         // print each rank
-        let state_slice = self.state.view_bits::<Msb0>();
-        let mut index: u32 = 64;
-        let mut last_rank = 9;
-        for bit in state_slice {
-       
-            let rank = index.div_ceil(8);
-            let rank_as_string = if last_rank > rank {
-                let rank_as = rank.to_string();
-                format!("\n{} ", rank_as)
-            } else {
-                String::from("")
-            };
+        let state_slice = self.state.view_bits::<Lsb0>();
+        let mut step: u32 = 1;
+        let mut last_rank = 0;
+        for rank in (0..8).rev() {
+            print!("\n{} ", rank+1);
 
-            let string = String::from("") + rank_as_string.as_str();
-
-            print!("{string}{} ", bit.then(||{1}).unwrap_or(0));
-
-            index -= 1;
-            last_rank = rank;
+            for file in 0..8 {
+                let bit_opt = state_slice.get((rank * 8) + file);
+                if let Some(bit) = bit_opt {
+                    let string = String::from("");
+                    print!("{string}{} ", bit.then(|| { "X" }).unwrap_or("O"));
+                }
+            }
         }
     }
 }
