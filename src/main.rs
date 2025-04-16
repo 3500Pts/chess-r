@@ -4,10 +4,10 @@ use crate::bitboard::*;
 
 fn main() {
     println!("Hello, world!");
-    
+
     let board_test = Bitboard {
-        state: 9123 as u64
+        state: 0x8040201008040201 as u64
     };
 
-    board_test.print();
+    println!("{board_test}")
 }
