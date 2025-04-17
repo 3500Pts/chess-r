@@ -1,7 +1,11 @@
 use bitvec::{order::Lsb0, view::BitView};
 
 use crate::bitboard::*;
-use std::{collections::HashMap, fmt::{self}, ops::BitOr};
+use std::{
+    collections::HashMap,
+    fmt::{self},
+    ops::BitOr,
+};
 
 const FEN_NR_OF_PARTS: usize = 6;
 const LIST_OF_PIECES: &str = "kqrbnpKQRBNP";
@@ -10,6 +14,34 @@ const SPLITTER: char = '/';
 const DASH: char = '-';
 const EM_DASH: char = '–';
 const SPACE: char = ' ';
+
+// Returns a table of the distance to the edges of the board for every square where index 0 of a square's table is the distance to the top, 1 is bottom, 2 is right, 3 is left, 4 is topright, 5 is bottomright, 6 is bottomleft, 7 is topleft.
+pub fn compute_edges() -> Vec<Vec<usize>> {
+    let mut square_list: Vec<Vec<usize>> = vec![vec![0; 8]; 64];
+
+    for square_pos in 0..square_list.len() {
+        let rank = square_pos.div_floor(8);
+        let file = square_pos % 8;
+
+        let top_dist = 7 - rank;
+        let bottom_dist = rank;
+        let left_dist = 7 - file;
+        let right_dist = file;
+
+        square_list[square_pos] = vec![
+            top_dist,
+            bottom_dist,
+            right_dist,
+            left_dist,
+            top_dist.min(right_dist),
+            bottom_dist.min(right_dist),
+            top_dist.min(left_dist),
+            bottom_dist.min(left_dist),
+        ];
+    }
+
+    square_list
+}
 
 #[derive(Debug)]
 pub enum FENErr {

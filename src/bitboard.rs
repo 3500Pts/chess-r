@@ -8,6 +8,7 @@ pub enum Team {
     White = 0,
     Black = 1,
     Both = 2,
+    Red = 3,
 }
 
 #[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
