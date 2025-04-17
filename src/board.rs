@@ -68,17 +68,11 @@ impl fmt::Display for FENErr {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct CastlingRights {
-    pub queen: bool,
-    pub king: bool,
-}
-
 #[derive(Debug, Clone)]
 pub struct BoardState {
     pub board_pieces: Vec<Vec<Bitboard>>,
     pub to_move: Team,
-    pub castling_rights: Vec<CastlingRights>,
+    pub castling_rights: u8, // Using queen, king, and each side as booleans, there are 4 bits of castling rights that can be expressed as a number
     pub fifty_move_clock: i64,
     pub en_passant_move: Option<u64>,
     pub turn_clock: i64,
@@ -89,13 +83,7 @@ impl Default for BoardState {
         BoardState {
             board_pieces: vec![vec![Bitboard { state: 0 }; 7]; 3],
             to_move: Team::White,
-            castling_rights: vec![
-                CastlingRights {
-                    queen: false,
-                    king: false
-                };
-                2
-            ],
+            castling_rights: 0,
             fifty_move_clock: 0,
             turn_clock: 1,
             en_passant_move: None,
@@ -104,6 +92,9 @@ impl Default for BoardState {
     }
 }
 impl BoardState {
+    // TODO: constructor from a board state + a move
+
+    // Constructs a board state from a FEN string
     pub fn from_fen(fen: String) -> Result<Self, FENErr> {
         let mut fen_part_idx = 0;
 
@@ -232,30 +223,21 @@ impl BoardState {
                     }
                 }
                 3 => {
-                    let mut black_rights = CastlingRights {
-                        queen: false,
-                        king: false,
-                    };
-                    let mut white_rights = CastlingRights {
-                        queen: false,
-                        king: false,
-                    };
+                    let mut rights: u8 = 0;
                     if fen_part.contains("K") {
-                        white_rights.king = true
+                        rights.view_bits_mut::<Lsb0>().set(0, true);
                     }
                     if fen_part.contains("Q") {
-                        white_rights.queen = true
+                        rights.view_bits_mut::<Lsb0>().set(1, true);
                     }
                     if fen_part.contains("k") {
-                        black_rights.king = true
+                        rights.view_bits_mut::<Lsb0>().set(2, true);
                     }
                     if fen_part.contains("q") {
-                        black_rights.queen = true
+                        rights.view_bits_mut::<Lsb0>().set(3, true);
                     }
 
-                    if !fen_part.contains("-") {
-                        result_obj.castling_rights[Team::White as usize] = white_rights;
-                        result_obj.castling_rights[Team::Black as usize] = black_rights;
+                    if fen_part.contains("-") && rights > 0 { // TODO: Throw an error if we hit the 'else' arm and rights is not 0
                     }
                 }
                 4 => {
@@ -287,6 +269,8 @@ impl BoardState {
         result_obj.init_piece_list();
         Ok(result_obj)
     }
+
+    // initializes piece lists based on the bitboards
     fn init_piece_list(&mut self) {
         let white_bits = &self.board_pieces[Team::White as usize];
         let black_bits = &self.board_pieces[Team::Black as usize];
@@ -329,14 +313,12 @@ impl BoardState {
             (PieceType::King, "♔"),
         ]);
         let pl = &self.piece_list;
-        
+
         for rank in (0..8).rev() {
             print!("\n{} ", rank + 1);
 
             for file in 0..8 {
-                let bit_opt = pl[
-                    rank * 8 + file
-                ];
+                let bit_opt = pl[rank * 8 + file];
                 print!("{} ", display_map.get(&bit_opt).unwrap());
             }
         }
