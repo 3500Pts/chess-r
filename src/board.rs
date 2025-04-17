@@ -108,10 +108,10 @@ impl BoardState {
             match fen_part_idx {
                 1 => {
                     for char in fen_part.chars() {
-                        let team = if char.is_lowercase() {
-                            Team::Black
-                        } else {
+                        let team = if char.is_ascii_uppercase() {
                             Team::White
+                        } else {
+                            Team::Black
                         };
 
                         let square: usize = ((rank as usize) * 8) + file as usize;

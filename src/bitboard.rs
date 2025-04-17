@@ -1,4 +1,7 @@
-use std::{fmt::{self}, ops::{BitAnd, BitOr, BitOrAssign}};
+use std::{
+    fmt::{self},
+    ops::{BitAnd, BitOr, BitOrAssign},
+};
 
 // bitboard.rs
 use bitvec::prelude::*;
@@ -50,7 +53,7 @@ pub const PIECE_TYPE_ARRAY: [PieceType; 7] = [
     PieceType::Bishop,
     PieceType::Knight,
     PieceType::Queen,
-    PieceType::King
+    PieceType::King,
 ];
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -66,10 +69,18 @@ impl fmt::Display for Bitboard {
             write!(f, "\n{} ", rank + 1)?;
 
             for file in 0..8 {
-                let bit_opt = state_slice.get((rank * 8) + file);
+                let square_idx = (rank * 8) + file;
+                let bit_opt = state_slice.get(square_idx);
                 if let Some(bit) = bit_opt {
                     let string = String::from("");
-                    write!(f, "{string}{} ", bit.then(|| { "X" }).unwrap_or("O"))?;
+
+                    // Leave the square_idx if statement for easy testing of what index maps to what position
+                    write!(
+                        f,
+                        "{string}{} ",
+                        bit.then(|| { if square_idx == 64 { "Z" } else { "X" } })
+                            .unwrap_or("O")
+                    )?;
                 }
             }
         }
@@ -77,12 +88,12 @@ impl fmt::Display for Bitboard {
     }
 }
 impl BitOr for Bitboard {
-    type Output = Self; 
+    type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
         return Bitboard {
-            state: self.state | rhs.state
-        }
+            state: self.state | rhs.state,
+        };
     }
 }
 impl BitOrAssign for Bitboard {
@@ -91,12 +102,12 @@ impl BitOrAssign for Bitboard {
     }
 }
 impl BitAnd for Bitboard {
-    type Output = Self; 
+    type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
         return Bitboard {
-            state: self.state & rhs.state
-        }
+            state: self.state & rhs.state,
+        };
     }
 }
 impl Default for Bitboard {
@@ -119,7 +130,7 @@ impl Bitboard {
                 let result = ((rank_id as u64) * 8) + (file_id as u64);
                 return Some(result);
             } else {
-                None 
+                None
             }
         } else {
             None

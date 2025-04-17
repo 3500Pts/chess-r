@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use bitvec::order::Msb0;
 use bitvec::order::Lsb0;
 use bitvec::view::BitView;
 use ggez::conf::WindowSetup;
@@ -108,16 +109,16 @@ impl MainState {
         // To do this, use the team bitboard to check the square's team
         // then the piece list to check the square's type
         for rank in (0..8).rev() {
-            for file in (0..8) {
+            for file in 0..8 {
                 let black_bits = self.board.get_team_coverage(Team::Black);
                 let white_bits = self.board.get_team_coverage(Team::White);
                 let square_bit_idx = ((rank * 8) + file) as usize;
                 
                 let square_team = {
-                    let white_bitcheck = white_bits.state.view_bits::<Lsb0>().get(square_bit_idx).expect("Index was not within bitboard").then(|| {Team::White});
+                    let white_bitcheck = white_bits.state.view_bits::<Msb0>().get(square_bit_idx).expect("Index was not within bitboard").then(|| {Team::White});
 
                     if white_bitcheck.is_none() {
-                        let black_bitcheck = black_bits.state.view_bits::<Lsb0>().get(square_bit_idx).expect("Index was not within bitboard").then(|| {Team::Black});
+                        let black_bitcheck = black_bits.state.view_bits::<Msb0>().get(square_bit_idx).expect("Index was not within bitboard").then(|| {Team::Black});
 
                         if let Some(bbc) = black_bitcheck {
                             bbc
@@ -139,6 +140,9 @@ impl MainState {
                     }
                 );
 
+                if square_bit_idx == 0 {
+                    //println!("{square_team:?}")
+                }
                 // So we know there is a piece, we can just match its type now
                 let square_piece = match self.board.piece_list[square_bit_idx] {
                     PieceType::Pawn => "p",
@@ -148,13 +152,14 @@ impl MainState {
                     PieceType::King => "k",
                     PieceType::Bishop => "b",
                     PieceType::None => {
-                        return Err(GameError::RenderError(String::from("FIX - Attempted to draw an empty bit")));
+                        // Should be unreachable
+                        return Err(GameError::RenderError(String::from("Attempted to draw a piece that does not exist")));
                     }
                 };
 
                 let square_piece_id = file_team + square_piece;
                 //file_team + square_piece
-                let image = self.piece_imgs.get(&   square_piece_id).unwrap();
+                let image = self.piece_imgs.get(&square_piece_id).unwrap();
                
                 canvas.draw(image, DrawParam::default().transform(
                     Transform::Values {
