@@ -3,7 +3,47 @@ use std::fmt::{self};
 // bitboard.rs
 use bitvec::prelude::*;
 
-#[derive(Debug)]
+#[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
+pub enum Team {
+    White = 0,
+    Black = 1,
+    Both = 2,
+}
+
+#[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
+pub enum PieceType {
+    None = 0,
+    Pawn = 1,
+    Rook = 2,
+    Bishop = 3,
+    Knight = 4,
+    Queen = 5,
+    King = 6,
+}
+
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub enum ChessFile {
+    A = 0,
+    B = 1,
+    C = 2,
+    D = 3,
+    E = 4,
+    F = 5,
+    G = 6,
+    H = 7,
+}
+pub const CHESS_FILE_ARRAY: [ChessFile; 8] = [
+    ChessFile::A,
+    ChessFile::B,
+    ChessFile::C,
+    ChessFile::D,
+    ChessFile::E,
+    ChessFile::F,
+    ChessFile::G,
+    ChessFile::H,
+];
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Bitboard {
     pub state: u64,
 }
