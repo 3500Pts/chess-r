@@ -1,7 +1,7 @@
 use bitvec::{order::Lsb0, view::BitView};
 
 use crate::bitboard::*;
-use std::fmt::{self};
+use std::{collections::HashMap, fmt::{self}, ops::BitOr};
 
 const FEN_NR_OF_PARTS: usize = 6;
 const LIST_OF_PIECES: &str = "kqrbnpKQRBNP";
@@ -15,7 +15,7 @@ const SPACE: char = ' ';
 pub enum FENErr {
     BadState,
     BadTeam,
-    MalformedNumber
+    MalformedNumber,
 }
 impl fmt::Display for FENErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -27,16 +27,10 @@ impl fmt::Display for FENErr {
                 )
             }
             Self::BadTeam => {
-                write!(
-                    f,
-                    "Team char is not either 'b' or 'w'\n"
-                )
+                write!(f, "Team char is not either 'b' or 'w'\n")
             }
             Self::MalformedNumber => {
-                write!(
-                    f,
-                    "Turn/halfmove clock characters malformed\n"
-                )
+                write!(f, "Turn/halfmove clock characters malformed\n")
             }
         }
     }
@@ -56,6 +50,7 @@ pub struct BoardState {
     pub fifty_move_clock: i64,
     pub en_passant_move: Option<u64>,
     pub turn_clock: i64,
+    pub piece_list: Vec<PieceType>,
 }
 impl Default for BoardState {
     fn default() -> Self {
@@ -71,7 +66,8 @@ impl Default for BoardState {
             ],
             fifty_move_clock: 0,
             turn_clock: 1,
-            en_passant_move: None
+            en_passant_move: None,
+            piece_list: vec![PieceType::None; 64], // TODO: Make this compatible with any amount of squares/any size of map. Maybe as a type argument to the board state?
         }
     }
 }
@@ -89,7 +85,6 @@ impl BoardState {
             match fen_part_idx {
                 1 => {
                     for char in fen_part.chars() {
-    
                         let team = if char.is_lowercase() {
                             Team::Black
                         } else {
@@ -99,33 +94,76 @@ impl BoardState {
                         let square: usize = ((rank as usize) * 8) + file as usize;
                         match char.to_ascii_lowercase() {
                             'k' => {
-                                result_obj.board_pieces[team as usize][PieceType::King as usize].state.view_bits_mut::<Lsb0>().set(square, true);
-                                result_obj.board_pieces[Team::Both as usize][PieceType::King as usize].state.view_bits_mut::<Lsb0>().set(square, true);
+                                result_obj.board_pieces[team as usize][PieceType::King as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
+                                result_obj.board_pieces[Team::Both as usize]
+                                    [PieceType::King as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
                             }
                             'q' => {
-                                result_obj.board_pieces[team as usize][PieceType::Queen as usize].state.view_bits_mut::<Lsb0>().set(square, true);
-                                result_obj.board_pieces[Team::Both as usize][PieceType::Queen as usize].state.view_bits_mut::<Lsb0>().set(square, true);
+                                result_obj.board_pieces[team as usize][PieceType::Queen as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
+                                result_obj.board_pieces[Team::Both as usize]
+                                    [PieceType::Queen as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
                             }
                             'p' => {
-                                result_obj.board_pieces[team as usize][PieceType::Pawn as usize].state.view_bits_mut::<Lsb0>().set(square, true);
-                                result_obj.board_pieces[Team::Both as usize][PieceType::Pawn as usize].state.view_bits_mut::<Lsb0>().set(square, true);
+                                result_obj.board_pieces[team as usize][PieceType::Pawn as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
+                                result_obj.board_pieces[Team::Both as usize]
+                                    [PieceType::Pawn as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
                             }
                             'b' => {
-                                result_obj.board_pieces[team as usize][PieceType::Bishop as usize].state.view_bits_mut::<Lsb0>().set(square, true);
-                                result_obj.board_pieces[Team::Both as usize][PieceType::Bishop as usize].state.view_bits_mut::<Lsb0>().set(square, true);
+                                result_obj.board_pieces[team as usize][PieceType::Bishop as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
+                                result_obj.board_pieces[Team::Both as usize]
+                                    [PieceType::Bishop as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
                             }
                             'r' => {
-                                result_obj.board_pieces[team as usize][PieceType::Rook as usize].state.view_bits_mut::<Lsb0>().set(square, true);
-                                result_obj.board_pieces[Team::Both as usize][PieceType::Rook as usize].state.view_bits_mut::<Lsb0>().set(square, true);
+                                result_obj.board_pieces[team as usize][PieceType::Rook as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
+                                result_obj.board_pieces[Team::Both as usize]
+                                    [PieceType::Rook as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
                             }
                             'n' => {
-                                result_obj.board_pieces[team as usize][PieceType::Knight as usize].state.view_bits_mut::<Lsb0>().set(square, true);
-                                result_obj.board_pieces[Team::Both as usize][PieceType::Knight as usize].state.view_bits_mut::<Lsb0>().set(square, true);
+                                result_obj.board_pieces[team as usize][PieceType::Knight as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
+                                result_obj.board_pieces[Team::Both as usize]
+                                    [PieceType::Knight as usize]
+                                    .state
+                                    .view_bits_mut::<Lsb0>()
+                                    .set(square, true);
                             }
                             '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' => {
                                 if let Some(empty_spaces) = char.to_digit(10) {
                                     if char != '8' && (file as usize + empty_spaces as usize) != 8 {
-                                        file = CHESS_FILE_ARRAY[file as usize + empty_spaces as usize]
+                                        file =
+                                            CHESS_FILE_ARRAY[file as usize + empty_spaces as usize]
                                     } else {
                                         // do nothing and skip to the next rank
                                         file = ChessFile::H;
@@ -139,10 +177,10 @@ impl BoardState {
                                 rank -= 1;
                                 file = ChessFile::A;
                             }
-                            _ => { return Err(FENErr::BadState) },
+                            _ => return Err(FENErr::BadState),
                         };
 
-                        if LIST_OF_PIECES.contains(char) && (file as i32 + 1) < 8{
+                        if LIST_OF_PIECES.contains(char) && (file as i32 + 1) < 8 {
                             if file as usize + 1 == 8 {
                                 rank -= 1;
                                 file = ChessFile::A;
@@ -158,7 +196,7 @@ impl BoardState {
                     } else if fen_part.contains("w") {
                         result_obj.to_move = Team::White
                     } else {
-                        return Err(FENErr::BadTeam)
+                        return Err(FENErr::BadTeam);
                     }
                 }
                 3 => {
@@ -182,37 +220,94 @@ impl BoardState {
                     if fen_part.contains("q") {
                         black_rights.queen = true
                     }
-                
+
                     if !fen_part.contains("-") {
                         result_obj.castling_rights[Team::White as usize] = white_rights;
                         result_obj.castling_rights[Team::Black as usize] = black_rights;
                     }
                 }
-                4 => {  
+                4 => {
                     if fen_part.len() < 2 {
                         // Not enough to count this
                         result_obj.en_passant_move = None;
                     } else {
                         result_obj.en_passant_move = Bitboard::al_notation_to_bit_idx(fen_part)
                     }
-                },
+                }
                 5 => {
                     if let Ok(hm_turn_clk) = fen_part.parse::<i64>() {
                         result_obj.fifty_move_clock = hm_turn_clk
                     } else {
-                        return Err(FENErr::MalformedNumber)
+                        return Err(FENErr::MalformedNumber);
                     }
-                },
+                }
                 6 => {
                     if let Ok(turn_clk) = fen_part.parse::<i64>() {
                         result_obj.turn_clock = turn_clk
                     } else {
-                        return Err(FENErr::MalformedNumber)
+                        return Err(FENErr::MalformedNumber);
                     }
-                },
+                }
                 _ => unreachable!("FEN data has more than seven parts"),
             }
         }
+
+        result_obj.init_piece_list();
         Ok(result_obj)
+    }
+    fn init_piece_list(&mut self) {
+        let white_bits = &self.board_pieces[Team::White as usize];
+        let black_bits = &self.board_pieces[Team::Black as usize];
+
+        for (piece_type, (blackboard, whiteboard)) in
+            white_bits.iter().zip(black_bits.iter()).enumerate()
+        {
+            let piece_type = PIECE_TYPE_ARRAY[piece_type];
+
+            // Iterate over each bit and table it
+            let mut bit_index = 0;
+            for black_bit in blackboard.state.view_bits::<Lsb0>() {
+                let square = black_bit.then(|| piece_type);
+                if let Some(square_piece) = square {
+                    self.piece_list[bit_index] = square_piece;
+                }
+                bit_index += 1;
+            }
+
+            let mut bit_index = 0;
+            for white_bit in whiteboard.state.view_bits::<Lsb0>() {
+                let square = white_bit.then(|| piece_type);
+                if let Some(square_piece) = square {
+                    self.piece_list[bit_index] = square_piece;
+                }
+                bit_index += 1;
+            }
+        }
+    }
+    pub fn render_piece_list(&self) {
+        print!("  a b c d e f g h");
+
+        let display_map = HashMap::from([
+            (PieceType::None, "O"),
+            (PieceType::Pawn, "♙"),
+            (PieceType::Bishop, "♗"),
+            (PieceType::Knight, "♘"),
+            (PieceType::Rook, "♖"),
+            (PieceType::Queen, "♕"),
+            (PieceType::King, "♔"),
+        ]);
+        let pl = &self.piece_list;
+        
+        for rank in (0..8).rev() {
+            print!("\n{} ", rank + 1);
+
+            for file in 0..8 {
+                let bit_opt = pl[
+                    rank * 8 + file
+                ];
+                print!("{} ", display_map.get(&bit_opt).unwrap());
+            }
+        }
+        print!("\n");
     }
 }

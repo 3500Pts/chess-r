@@ -42,6 +42,15 @@ pub const CHESS_FILE_ARRAY: [ChessFile; 8] = [
     ChessFile::G,
     ChessFile::H,
 ];
+pub const PIECE_TYPE_ARRAY: [PieceType; 7] = [
+    PieceType::None,
+    PieceType::Pawn,
+    PieceType::Rook,
+    PieceType::Bishop,
+    PieceType::Knight,
+    PieceType::Queen,
+    PieceType::King
+];
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Bitboard {
