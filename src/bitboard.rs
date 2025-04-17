@@ -1,4 +1,4 @@
-use std::fmt::{self};
+use std::{fmt::{self}, ops::{BitAnd, BitOr, BitOrAssign}};
 
 // bitboard.rs
 use bitvec::prelude::*;
@@ -75,6 +75,35 @@ impl fmt::Display for Bitboard {
         write!(f, "")
     }
 }
+impl BitOr for Bitboard {
+    type Output = Self; 
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        return Bitboard {
+            state: self.state | rhs.state
+        }
+    }
+}
+impl BitOrAssign for Bitboard {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.state |= rhs.state
+    }
+}
+impl BitAnd for Bitboard {
+    type Output = Self; 
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        return Bitboard {
+            state: self.state & rhs.state
+        }
+    }
+}
+impl Default for Bitboard {
+    fn default() -> Self {
+        Bitboard { state: 0 }
+    }
+}
+
 impl Bitboard {
     pub fn al_notation_to_bit_idx(notation: &str) -> Option<u64> {
         let list = ["a", "b", "c", "d", "e", "f", "g", "h"];

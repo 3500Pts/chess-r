@@ -1,4 +1,3 @@
-
 pub mod bitboard;
 pub mod board;
 use board::BoardState;
@@ -11,10 +10,8 @@ const RANDOM_GAME_POS: &str = "rnb1kbnr/pqpp3p/1p2ppp1/8/4P3/PPN5/2PPBPPP/R1BQ1R
 fn main() {
     println!("Hello, world!");
 
-    let board_test = Bitboard {
-        state: 0x8040201008040201 as u64
-    };
     let board_full_test = BoardState::from_fen(String::from(START_POS_CHESS)).unwrap();
+    println!("{}", board_full_test.get_team_coverage(Team::Both));
 
     board_full_test.render_piece_list();
     println!("{:?}", board_full_test)

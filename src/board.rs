@@ -310,4 +310,15 @@ impl BoardState {
         }
         print!("\n");
     }
+
+    pub fn get_team_coverage(&self, team: Team) -> Bitboard {
+        let mut result = Bitboard::default();
+
+        for piece_board in &self.board_pieces[team as usize] {
+            // Apply all the piece tables to the base bitboard
+            result |= *piece_board
+        }
+
+        result
+    }
 }
