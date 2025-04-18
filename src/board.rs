@@ -1,6 +1,10 @@
-use bitvec::{order::Lsb0, view::BitView};
+use bitvec::{
+    order::{Lsb0, Msb0},
+    view::BitView,
+};
+use ggez::context::HasMut;
 
-use crate::bitboard::*;
+use crate::{bitboard::*, r#move::Move};
 use std::{
     collections::HashMap,
     fmt::{self},
@@ -300,7 +304,7 @@ impl BoardState {
             }
         }
     }
-    pub fn render_piece_list(&self) {
+    pub fn render_piece_list(pl: Vec<PieceType>) {
         print!("  a b c d e f g h");
 
         let display_map = HashMap::from([
@@ -312,8 +316,6 @@ impl BoardState {
             (PieceType::Queen, "♕"),
             (PieceType::King, "♔"),
         ]);
-        let pl = &self.piece_list;
-
         for rank in (0..8).rev() {
             print!("\n{} ", rank + 1);
 
@@ -334,5 +336,100 @@ impl BoardState {
         }
 
         result
+    }
+    pub fn get_square_team(&mut self, square_idx: usize) -> Option<Team> {
+        let white_check = self.get_team_coverage(Team::White);
+        let black_check = self.get_team_coverage(Team::Black);
+
+        let square_team = {
+            let white_bitcheck = white_check
+                .state
+                .view_bits::<Lsb0>()
+                .get(square_idx)
+                .expect("Index was not within bitboard")
+                .then(|| Team::White);
+
+            if white_bitcheck.is_none() {
+                let black_bitcheck = black_check
+                    .state
+                    .view_bits::<Lsb0>()
+                    .get(square_idx)
+                    .expect("Index was not within bitboard")
+                    .then(|| Team::Black);
+
+                if let Some(_bbc) = black_bitcheck {
+                    black_bitcheck
+                } else {
+                    // There is not a piece here.
+                    None
+                }
+            } else {
+                white_bitcheck
+            }
+        };
+        square_team
+    }
+
+    fn move_piece(&mut self, square_team: Team, moving_piece_type: PieceType, r#move: Move) {
+        let board_pieces = &mut self.board_pieces;
+
+        if square_team == Team::White {
+            board_pieces[Team::White as usize][moving_piece_type as usize]
+                .state
+                .view_bits_mut::<Lsb0>()
+                .set(r#move.start, false);
+            board_pieces[Team::White as usize][moving_piece_type as usize]
+                .state
+                .view_bits_mut::<Lsb0>()
+                .set(r#move.target, true);
+
+            board_pieces[Team::Black as usize].iter_mut().for_each(|bb| {
+                bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
+            });
+        } else {
+            board_pieces[Team::Black as usize][moving_piece_type as usize]
+                .state
+                .view_bits_mut::<Lsb0>()
+                .set(r#move.start, false);
+            board_pieces[Team::Black as usize][moving_piece_type as usize]
+                .state
+                .view_bits_mut::<Lsb0>()
+                .set(r#move.target, true);
+
+            // Clear the slot for the piece - this resembles a capture
+            board_pieces[Team::White as usize].iter_mut().for_each(|bb| {
+                bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
+            });
+        }
+
+        self.piece_list[r#move.start] = PieceType::None;
+        self.piece_list[r#move.target] = moving_piece_type;
+    }
+    pub fn make_move(&mut self, r#move: Move) -> &BoardState {
+        let mut board_pieces = self.board_pieces.concat();
+        // Update out of the target positions
+        let moving_piece_type = self.piece_list[r#move.start];
+        let target_piece_type = self.piece_list[r#move.target];
+
+        let square_team_opt = self.get_square_team(r#move.start);
+        let target_team_opt = self.get_square_team(r#move.target);
+
+        if square_team_opt == None {
+            println!("Did not drag a unit");
+            return self;
+        }
+        if target_team_opt == square_team_opt {
+            println!("Tried to attack ally");
+            return self;
+        } // Return and fail the movement if the target piece and this piece are on the same team
+
+        if let Some(square_team) = square_team_opt {
+            println!("{square_team:?} {moving_piece_type:?} {move:?}");
+
+            self.move_piece(square_team, moving_piece_type, r#move);
+        } else {
+            println!("Didn't make move because it was not coherent")
+        }
+        return self;
     }
 }

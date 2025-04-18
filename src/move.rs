@@ -2,17 +2,17 @@ use crate::bitboard::{PieceType, Team};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Piece {
-    piece_type: PieceType,
-    team: Team,
-    position: usize
+    pub piece_type: PieceType,
+    pub team: Team,
+    pub position: usize
 }
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Move {
-    start: usize,
-    target: usize,
-    captures: Option<PieceType>
+    pub start: usize,
+    pub target: usize,
+    pub captures: Option<PieceType>
 }
 
 // Compute path for rooks, queens, bishops. Requires pre-computed edges

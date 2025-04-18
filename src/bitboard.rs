@@ -62,7 +62,7 @@ pub struct Bitboard {
 }
 impl fmt::Display for Bitboard {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "  a b c d e f g h")?;
+        write!(f, "\n  a b c d e f g h")?;
 
         let state_slice = self.state.view_bits::<Lsb0>();
         for rank in (0..8).rev() {
@@ -78,7 +78,7 @@ impl fmt::Display for Bitboard {
                     write!(
                         f,
                         "{string}{} ",
-                        bit.then(|| { if square_idx == 64 { "Z" } else { "X" } })
+                        bit.then(|| { if square_idx == 1 { "Z" } else { "X" } })
                             .unwrap_or("O")
                     )?;
                 }
