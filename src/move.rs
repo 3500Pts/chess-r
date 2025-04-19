@@ -37,7 +37,6 @@ const DIRECTION_OFFSETS: [i32; 8] = [
     7,  // nw
     -9, // sw
 ];
-//TODO: OPTIMIZATION OPTION(?): Precompute movements from every position for every piece then cull them by legality i.e there's a piece infront of the ray.
 
 fn is_square_attackable(board: &BoardState, piece: Piece, possible_target: usize) -> bool {
     let target_team = board.get_square_team(possible_target);
@@ -189,17 +188,8 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
 
 // For nightrider, we could do this recursively until we get 0 results
 pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
-    let knight_moves: [i32; 8] = [
-        10,  // NW close
-        17,  // NW far
-        -10, // SW close
-        -17, // SW far
-        15,  // NE close
-        19,  // NE far
-        -15, // SE close
-        -19, // SE far
-    ];
-    let mut computed_moves: Vec<Move> = Vec::new();
+    let knight_moves: [i32; 8] = [10, 17, -10, -17, 15, -15, 6, -6];
+    let computed_moves: Vec<Move> = Vec::new();
     let mut bitboard = Bitboard::default();
 
     for knight_square in knight_moves {
@@ -213,10 +203,6 @@ pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
             possible_target,
             is_square_attackable(board, piece, possible_target),
         );
-        if target_piece_type != PieceType::None {
-            // Piece blocks leaping here if it isn't on-side
-            break;
-        }
     }
 
     (bitboard, computed_moves)
