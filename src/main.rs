@@ -14,8 +14,9 @@ use bitboard::Team;
 use board::BoardState;
 use ggez::conf::WindowSetup;
 use ggez::event;
+use tracing_subscriber::EnvFilter;
 use ui::MainState;
-
+use tracing::{level_filters::LevelFilter, subscriber};
 pub fn main() {
     let board_full_test = BoardState::from_fen(String::from(START_POS_CHESS)).expect("Failed to create board from FEN");
     //board_full_test.render_piece_list();
@@ -29,6 +30,17 @@ pub fn main() {
         vsync: true
     });
     
+    /*let chess_filter = EnvFilter::builder()
+    .with_default_directive(LevelFilter::INFO.into())
+    .from_env().unwrap()
+    .add_directive("chess-r=debug".parse().unwrap());
+
+    tracing_subscriber::fmt()
+    .with_level(true)
+    .with_env_filter(chess_filter)
+    .compact()
+    .init();*/
+
     let (mut ctx, event_loop) = cb.build().expect("Failed to build ggez context");
     
     let state = MainState::new(board_full_test, &mut ctx).unwrap();
