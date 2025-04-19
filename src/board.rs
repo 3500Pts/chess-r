@@ -7,7 +7,6 @@ use crate::{
 use std::{
     collections::HashMap,
     fmt::{self},
-    option,
 };
 
 const LIST_OF_PIECES: &str = "kqrbnpKQRBNP";
@@ -456,7 +455,7 @@ impl BoardState {
         let square_team_opt = self.get_square_team(r#move.start);
         let target_team_opt = self.get_square_team(r#move.target);
 
-        if (r#move.start == r#move.target) {
+        if r#move.start == r#move.target {
             return Err(MoveError::NotAMove);
         }
         if square_team_opt == None {

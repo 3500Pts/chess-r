@@ -14,9 +14,7 @@ use bitboard::Team;
 use board::BoardState;
 use ggez::conf::WindowSetup;
 use ggez::event;
-use tracing_subscriber::EnvFilter;
 use ui::MainState;
-use tracing::{level_filters::LevelFilter, subscriber};
 pub fn main() {
     let board_full_test = BoardState::from_fen(String::from(START_POS_CHESS)).expect("Failed to create board from FEN");
     //board_full_test.render_piece_list();
