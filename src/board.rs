@@ -1,12 +1,13 @@
-use bitvec::{
-    order::Lsb0,
-    view::BitView,
-};
+use bitvec::{order::Lsb0, view::BitView};
 
-use crate::{bitboard::*, r#move::{Move, MoveError}};
+use crate::{
+    bitboard::*,
+    r#move::{compute_knight, compute_pawn, compute_slider, Move, MoveError, Piece},
+};
 use std::{
     collections::HashMap,
     fmt::{self},
+    option,
 };
 
 const LIST_OF_PIECES: &str = "kqrbnpKQRBNP";
@@ -22,8 +23,8 @@ pub fn compute_edges() -> Vec<Vec<usize>> {
 
         let top_dist = 7 - rank;
         let bottom_dist = rank;
-        let left_dist = 7 - file;
-        let right_dist = file;
+        let left_dist = file;
+        let right_dist = 7 - file;
 
         square_list[square_pos] = vec![
             top_dist,
@@ -74,6 +75,7 @@ pub struct BoardState {
     pub en_passant_move: Option<u64>,
     pub turn_clock: i64,
     pub piece_list: Vec<PieceType>,
+    pub edge_compute: Vec<Vec<usize>>,
 }
 impl Default for BoardState {
     fn default() -> Self {
@@ -85,6 +87,7 @@ impl Default for BoardState {
             turn_clock: 1,
             en_passant_move: None,
             piece_list: vec![PieceType::None; 64], // TODO: Make this compatible with any amount of squares/any size of map. Maybe as a type argument to the board state?
+            edge_compute: compute_edges(),
         }
     }
 }
@@ -330,7 +333,49 @@ impl BoardState {
 
         result
     }
-    pub fn get_square_team(&mut self, square_idx: usize) -> Option<Team> {
+    pub fn get_psuedolegal_moves(&self) -> Vec<(Bitboard, Vec<Move>)> {
+        let pl = self.piece_list.clone();
+        let mut move_list: Vec<(Bitboard, Vec<Move>)> = Vec::new(); // The bitboard is used for highlighting moves the selected square has
+        pl.iter().enumerate().for_each(|(index, piece_type)| {
+            let default_push = (Bitboard::default(),
+            vec![Move {
+                start: index,
+                target: index,
+                captures: None,
+            }]);
+
+            let team_opt = self.get_square_team(index);
+            if let Some(team) = team_opt {
+                let piece_obj =  Piece {
+                    piece_type: *piece_type,
+                    position: index,
+                    team: team,
+                };
+                let (psuedo_bitboard, psuedo_moves) = match piece_type {
+                    PieceType::Bishop | PieceType::Rook | &PieceType::Queen | PieceType::King => compute_slider(
+                        self,
+                        piece_obj
+                    ),
+                    PieceType::Knight => compute_knight(
+                        self, 
+                        piece_obj
+                    ),
+                    PieceType::Pawn => compute_pawn(
+                        self,
+                        piece_obj
+                    ),
+                    _ => default_push
+                };
+
+                move_list.push((psuedo_bitboard, psuedo_moves));
+            } else {
+                move_list.push(default_push);
+            }
+        });
+
+        move_list
+    }
+    pub fn get_square_team(&self, square_idx: usize) -> Option<Team> {
         let white_check = self.get_team_coverage(Team::White);
         let black_check = self.get_team_coverage(Team::Black);
 
@@ -376,9 +421,11 @@ impl BoardState {
                 .view_bits_mut::<Lsb0>()
                 .set(r#move.target, true);
 
-            board_pieces[Team::Black as usize].iter_mut().for_each(|bb| {
-                bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
-            });
+            board_pieces[Team::Black as usize]
+                .iter_mut()
+                .for_each(|bb| {
+                    bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
+                });
         } else {
             board_pieces[Team::Black as usize][moving_piece_type as usize]
                 .state
@@ -390,9 +437,11 @@ impl BoardState {
                 .set(r#move.target, true);
 
             // Clear the slot for the piece - this resembles a capture
-            board_pieces[Team::White as usize].iter_mut().for_each(|bb| {
-                bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
-            });
+            board_pieces[Team::White as usize]
+                .iter_mut()
+                .for_each(|bb| {
+                    bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
+                });
         }
 
         self.piece_list[r#move.start] = PieceType::None;
@@ -407,17 +456,20 @@ impl BoardState {
         let square_team_opt = self.get_square_team(r#move.start);
         let target_team_opt = self.get_square_team(r#move.target);
 
+        if (r#move.start == r#move.target) {
+            return Err(MoveError::NotAMove);
+        }
         if square_team_opt == None {
-            return Err(MoveError::NoUnit)
+            return Err(MoveError::NoUnit);
         }
         if target_team_opt == square_team_opt {
-            return Err(MoveError::AttackedAlly)
-        } 
+            return Err(MoveError::AttackedAlly);
+        }
         if let Some(square_team) = square_team_opt {
             tracing::debug!("{square_team:?} {moving_piece_type:?} {move:?}");
 
             self.move_piece(square_team, moving_piece_type, r#move);
         }
-        return Ok(())
+        return Ok(());
     }
 }

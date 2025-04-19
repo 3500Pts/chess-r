@@ -1,4 +1,5 @@
 #![feature(int_roundings)]
+#![feature(try_find)]
 //#![windows_subsystem = "windows"]
 
 pub mod bitboard;

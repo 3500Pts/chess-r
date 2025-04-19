@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
+use bitvec::order::Lsb0;
+use bitvec::store::BitStore;
+use bitvec::view::BitView;
+use ggez::GameError;
 use ggez::audio::SoundSource;
 use ggez::audio::Source;
-use ggez::GameError;
 use ggez::event;
 use ggez::glam::*;
 use ggez::graphics::Canvas;
@@ -15,6 +18,7 @@ use ggez::mint::Point2;
 use ggez::mint::Vector2;
 use ggez::{Context, GameResult};
 
+use crate::bitboard::Bitboard;
 use crate::bitboard::PIECE_TYPE_ARRAY;
 use crate::bitboard::PieceType;
 use crate::bitboard::Team;
@@ -25,8 +29,8 @@ pub type ColorRGBA = [f32; 4];
 
 const BLACK: ColorRGBA = [0.2, 0.2, 0.2, 1.0];
 const SELECTED_SQUARE_COLOR: ColorRGBA = [1.0, 1.0, 1.0, 1.0];
-const LEGAL_MOVE_COLOR: ColorRGBA = [0.5, 0.5, 0.5, 1.0];
-const LEGAL_CAP_COLOR: ColorRGBA = [0.25, 0.25, 0.25, 1.0];
+const LEGAL_MOVE_COLOR_LERP: f32 = 0.3;
+const LEGAL_CAP_COLOR_LERP: f32 = 0.5;
 const ORIGIN_COLOR: ColorRGBA = [0.0, 0.0, 1.0, 1.0];
 const ANTI_ORIGIN_COLOR: ColorRGBA = [0.0, 1.0, 1.0, 1.0];
 const LIGHT_SQUARE_COLOR: ColorRGBA = [0.941, 0.467, 0.467, 1.0];
@@ -35,6 +39,17 @@ const WIDTH: f32 = 600.0;
 const SQUARE_SIZE: f32 = WIDTH / 8.0;
 const FLAG_DEBUG_UI_COORDS: bool = false;
 
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+pub fn color_lerp(left: Color, right: Color, t: f32) -> Color {
+    return Color::from([
+        lerp(left.r, right.r, t),
+        lerp(left.g, right.g, t),
+        lerp(left.b, right.b, t),
+        lerp(left.a, right.a, t),
+    ]);
+}
 pub struct MainState {
     board: BoardState,
     piece_imgs: HashMap<String, Image>,
@@ -43,7 +58,8 @@ pub struct MainState {
     queued_move: Option<Move>, // Moves are queued to the draw queue so nothing changes during drawing
     drag_x: Option<f32>,
     drag_y: Option<f32>,
-    
+    board_legal_moves: Option<Vec<(Bitboard, Vec<Move>)>>,
+    last_move_origin: Option<usize>,
 }
 
 impl MainState {
@@ -55,9 +71,11 @@ impl MainState {
             selected_square: None,
             queued_move: None,
             drag_x: None,
-            drag_y: None
+            drag_y: None,
+            board_legal_moves: None,
+            last_move_origin: None
         };
-
+        s.board_legal_moves = Some(s.board.get_psuedolegal_moves());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
 
         let mut piece_ids: Vec<String> = Vec::new();
@@ -91,9 +109,12 @@ impl MainState {
             }
         });
 
-
         // Preload sounds
-        let sound_paths = vec!["bass_intro".to_string(), "piece_move".to_string(), "capture".to_string()];
+        let sound_paths = vec![
+            "bass_intro".to_string(),
+            "piece_move".to_string(),
+            "capture".to_string(),
+        ];
 
         sound_paths.iter().for_each(|id| {
             let sound_source_r = Source::new(ctx, format!("/sounds/{}.ogg", id));
@@ -108,19 +129,44 @@ impl MainState {
     }
     fn draw_board(&mut self, ctx: &mut Context, canvas: &mut Canvas) -> GameResult<()> {
         for rank in 0..8 {
-        for file in 0..8 {
+            for file in 0..8 {
                 let square_number = 63 - (((7 - rank) * 8) + file) as usize;
-                let color = 
-                if square_number == 0 && FLAG_DEBUG_UI_COORDS {
+                // What an unholy if statement. TODO: Make it neater maybe
+                let default_color = if (rank + file) % 2 == 0 {
+                    Color::from(LIGHT_SQUARE_COLOR)
+                } else {
+                    Color::from(DARK_SQUARE_COLOR)
+                };
+                let color = if square_number == 0 && FLAG_DEBUG_UI_COORDS {
                     Color::from(ORIGIN_COLOR)
                 } else if square_number == 6 && FLAG_DEBUG_UI_COORDS {
                     Color::from(ANTI_ORIGIN_COLOR)
                 } else if Some(square_number) == self.selected_square {
                     Color::from(SELECTED_SQUARE_COLOR)
-                } else if (rank + file) % 2 == 0 {
-                    Color::from(LIGHT_SQUARE_COLOR)
+                } else if let Some(selected_square) = self.selected_square {
+                    if let Some(pl_moves) = &self.board_legal_moves {
+                        let status_on_bitboard = pl_moves[selected_square]
+                            .0
+                            .state
+                            .view_bits::<Lsb0>()
+                            .get(square_number);
+
+                        if status_on_bitboard.unwrap().then_some(true).is_some() {
+                            color_lerp(
+                                Color::from(SELECTED_SQUARE_COLOR),
+                                default_color,
+                                LEGAL_MOVE_COLOR_LERP,
+                            )
+                        } else {
+                            default_color
+                        }
+                    } else {
+                        default_color
+                    }
+                } else if Some(square_number) == self.last_move_origin {
+                    color_lerp(Color::from(SELECTED_SQUARE_COLOR), default_color, 0.9)
                 } else {
-                    Color::from(DARK_SQUARE_COLOR)
+                    default_color
                 };
 
                 let square_mesh = graphics::Mesh::new_rectangle(
@@ -178,12 +224,23 @@ impl MainState {
 
                     let square_piece_id = file_team + square_piece;
                     //file_team + square_piece
-                    let image = self.piece_imgs.get(&square_piece_id).expect(&format!("Couldn't find piece png for {square_piece_id}"));
-                    
+                    let image = self
+                        .piece_imgs
+                        .get(&square_piece_id)
+                        .expect(&format!("Couldn't find piece png for {square_piece_id}"));
+
                     let piece_x = file as f32 * SQUARE_SIZE;
                     let piece_y = rank as f32 * SQUARE_SIZE;
-                    let piece_x = if Some(square_bit_idx) == self.selected_square { self.drag_x.unwrap_or(piece_x) } else { piece_x };
-                    let piece_y = if Some(square_bit_idx) == self.selected_square { self.drag_y.unwrap_or(piece_y) } else { piece_y };
+                    let piece_x = if Some(square_bit_idx) == self.selected_square {
+                        self.drag_x.unwrap_or(piece_x)
+                    } else {
+                        piece_x
+                    };
+                    let piece_y = if Some(square_bit_idx) == self.selected_square {
+                        self.drag_y.unwrap_or(piece_y)
+                    } else {
+                        piece_y
+                    };
                     canvas.draw(
                         image,
                         DrawParam::default().transform(
@@ -271,15 +328,27 @@ impl event::EventHandler<ggez::GameError> for MainState {
         if button == event::MouseButton::Left && self.queued_move == None {
             let target_square_idx = MainState::get_square_idx_from_pixel(x, y) as usize;
             tracing::debug!("Mouse up at square {}", target_square_idx);
-            // Attempt a move here
-            if let Some(start_square) = self.selected_square {
-                self.queued_move = Some(Move {
-                    start: start_square,
-                    target: target_square_idx,
-                    captures: None,
-                });
+            // Attempt a move here if it's on the bitboard
+
+            if let Some(selected_square) = self.selected_square {
+                if let Some(pl_moves) = &self.board_legal_moves {
+                    let status_on_bitboard = pl_moves[selected_square]
+                        .0
+                        .state
+                        .view_bits::<Lsb0>()
+                        .get(target_square_idx);
+                    if pl_moves[selected_square].0.state > 0 {
+                        if let Some(bitref) = status_on_bitboard {
+                            self.queued_move = bitref.then_some(Move {
+                                start: selected_square,
+                                target: target_square_idx,
+                                captures: None, // TODO: Find the target position in the piece table
+                            });
+                        }
+                    }
+                }
             }
-            // Drop the square
+            // Drop the square if there is one
             self.selected_square = None;
             self.drag_x = None;
             self.drag_y = None;
@@ -295,10 +364,18 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
             if let Ok(()) = self.board.make_move(c_move) {
                 self.play_sound(ctx, "piece_move", 0.1)?;
+                // Regenerate moves
+                self.board_legal_moves = Some(self.board.get_psuedolegal_moves())
             }
 
-            tracing::debug!("White bitboard after move: {}", self.board.get_team_coverage(Team::White));
-            tracing::debug!("Black bitboard after move: {}", self.board.get_team_coverage(Team::Black));
+            tracing::debug!(
+                "White bitboard after move: {}",
+                self.board.get_team_coverage(Team::White)
+            );
+            tracing::debug!(
+                "Black bitboard after move: {}",
+                self.board.get_team_coverage(Team::Black)
+            );
             // Pull the move from queue
             self.queued_move = None;
         }
