@@ -1,12 +1,8 @@
 use std::collections::HashMap;
 
-use bitvec::order::Lsb0;
-use bitvec::order::Msb0;
-use bitvec::view::BitView;
 use ggez::audio::SoundSource;
 use ggez::audio::Source;
 use ggez::GameError;
-use ggez::conf::WindowSetup;
 use ggez::event;
 use ggez::glam::*;
 use ggez::graphics::Canvas;
@@ -36,7 +32,6 @@ const ANTI_ORIGIN_COLOR: ColorRGBA = [0.0, 1.0, 1.0, 1.0];
 const LIGHT_SQUARE_COLOR: ColorRGBA = [0.941, 0.467, 0.467, 1.0];
 const DARK_SQUARE_COLOR: ColorRGBA = [0.651, 0.141, 0.141, 1.0];
 const WIDTH: f32 = 600.0;
-const HEIGHT: f32 = 800.0;
 const SQUARE_SIZE: f32 = WIDTH / 8.0;
 const FLAG_DEBUG_UI_COORDS: bool = false;
 
@@ -112,8 +107,8 @@ impl MainState {
         Ok(s)
     }
     fn draw_board(&mut self, ctx: &mut Context, canvas: &mut Canvas) -> GameResult<()> {
-        for rank in (0..8) {
-        for file in (0..8) {
+        for rank in 0..8 {
+        for file in 0..8 {
                 let square_number = 63 - (((7 - rank) * 8) + file) as usize;
                 let color = 
                 if square_number == 0 && FLAG_DEBUG_UI_COORDS {
@@ -258,8 +253,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
         // Do drag effect on the piece at the currently selected square
         if let Some(start_square) = self.selected_square {
             let start_square = start_square as f32;
-            let start_x = ((start_square % 8.0) * SQUARE_SIZE);
-            let start_y = ((start_square / 8.0) * SQUARE_SIZE);
+            let start_x = (start_square % 8.0) * SQUARE_SIZE;
+            let start_y = (start_square / 8.0) * SQUARE_SIZE;
 
             self.drag_x = Some(x - (0.5 * SQUARE_SIZE));
             self.drag_y = Some(y - (0.5 * SQUARE_SIZE));
