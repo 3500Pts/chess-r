@@ -352,20 +352,11 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
             if let Some(selected_square) = self.selected_square {
                 if let Some(pl_moves) = &self.board_legal_moves {
-                    let status_on_bitboard = pl_moves[selected_square]
-                        .0
-                        .state
-                        .view_bits::<Lsb0>()
-                        .get(target_square_idx);
-                    if pl_moves[selected_square].0.state > 0 {
-                        if let Some(bitref) = status_on_bitboard {
-                            self.queued_move = bitref.then_some(Move {
-                                start: selected_square,
-                                target: target_square_idx,
-                                captures: None, // TODO: Find the target position in the piece table
-                            });
-                        }
-                    }
+                    self.queued_move = pl_moves[selected_square]
+                        .1
+                        .iter()
+                        .find(|fmove| fmove.target == target_square_idx)
+                        .copied();
                 }
             }
             // Drop the square if there is one

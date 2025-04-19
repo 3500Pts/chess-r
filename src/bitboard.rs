@@ -1,6 +1,6 @@
 use std::{
     fmt::{self},
-    ops::{BitAnd, BitOr, BitOrAssign},
+    ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign},
 };
 
 // bitboard.rs
@@ -12,6 +12,7 @@ pub enum Team {
     Black = 1,
     Both = 2,
     Red = 3,
+    None = 4
 }
 
 #[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
@@ -110,6 +111,11 @@ impl BitAnd for Bitboard {
         };
     }
 }
+impl BitAndAssign for Bitboard {
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.state &= rhs.state
+    }
+}
 impl Default for Bitboard {
     fn default() -> Self {
         Bitboard { state: 0 }
@@ -117,7 +123,7 @@ impl Default for Bitboard {
 }
 
 impl Bitboard {
-    pub fn al_notation_to_bit_idx(notation: &str) -> Option<u64> {
+    pub fn al_notation_to_bit_idx(notation: &str) -> Option<usize> {
         let list = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
         let split: Vec<char> = notation.chars().collect();
@@ -127,7 +133,7 @@ impl Bitboard {
         if let Some(rank_id) = rank {
             let file = split[1].to_digit(10);
             if let Some(file_id) = file {
-                let result = ((rank_id as u64) * 8) + (file_id as u64);
+                let result = ((rank_id as usize) * 8) + (file_id as usize);
                 return Some(result);
             } else {
                 None

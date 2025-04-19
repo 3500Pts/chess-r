@@ -12,12 +12,14 @@ pub struct Piece {
     pub position: usize,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Move {
     pub start: usize,
     pub target: usize,
-    pub captures: Option<PieceType>,
+    pub captures: Option<Piece>,
+    pub is_pawn_double: bool, // en passant tracker
 }
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum MoveError {
     AttackedAlly,
@@ -41,7 +43,6 @@ const DIRECTION_OFFSETS: [i32; 8] = [
 fn is_square_attackable(board: &BoardState, piece: Piece, possible_target: usize) -> bool {
     let target_team = board.get_square_team(possible_target);
     let target_piece_type = board.piece_list[possible_target];
-    let mut bitboard = Bitboard::default();
 
     if target_piece_type == PieceType::None {
         // Nothing is there, do not process based on team
@@ -60,6 +61,21 @@ fn is_square_attackable(board: &BoardState, piece: Piece, possible_target: usize
         }
     }
 }
+
+fn psuedolegalize_move(
+    move_list: &mut Vec<Move>,
+    bitboard: &mut Bitboard,
+    cmove: Move,
+    condition: bool,
+) {
+    if condition {
+        move_list.push(cmove);
+    }
+    bitboard
+        .state
+        .view_bits_mut::<Lsb0>()
+        .set(cmove.target, condition);
+}
 /*
     Gets psuedolegal moves for the pawns.
 */
@@ -68,46 +84,93 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
     let mut computed_moves: Vec<Move> = Vec::new();
     let forward_direction: i32 = match piece.team {
         Team::Black => -8,
-        Team::White => 8,
+        Team::White => 8, // making this 7 makes for an interesting diagonal pawn...
         _ => {
-            // TODO: Dont forget to fix this if you add other teams
-            panic!("Pawn movements for unconventional teams are unhandled");
+            panic!("Pawn movements for unconventional teams are unhandled"); // TODO: Dont forget to fix this if you add other teams
         }
     };
+
+    let pawn_view_range = forward_direction.signum();
+
     let far_edge_dist = match piece.team {
         Team::Black => board.edge_compute[piece.position][1],
         Team::White => board.edge_compute[piece.position][0],
         _ => {
-            // TODO: Dont forget to fix this if you add other teams
-            panic!("Pawn movements for unconventional teams are unhandled");
+            unreachable!()
         }
     };
 
     if far_edge_dist == 0 {
-        // Promoted
-        return (bitboard, computed_moves);
+        return (bitboard, computed_moves); // Promotable
     }
 
-    // Check for pawn in front
+    let mut offset_index = 0;
+    let step_length = if far_edge_dist == 6 { 2 } else { 1 }; // Do we award initial advances from any start position? It is an nteresting question, but for now we just assume normal start
 
-    let possible_target = (piece.position as i32 + forward_direction) as usize;
-    let target_piece_type = board.piece_list[possible_target];
+    let of_start = (forward_direction - pawn_view_range).min(forward_direction + pawn_view_range);
+    let of_end = (forward_direction - pawn_view_range).max(forward_direction + pawn_view_range);
 
-    let target_team = board.get_square_team(possible_target);
+    for offset in of_start..=of_end {
+        'step_ray: for step in 1..=step_length {
+            let possible_target = (piece.position as i32 + (offset * step)) as usize;
+            if !(0..board.piece_list.len()).contains(&possible_target) {
+                continue;
+            };
 
-    if target_piece_type == PieceType::None {
-        // Nothing is there, do not process based on team
-        // Register a capture
-        computed_moves.push(Move {
-            start: piece.position,
-            target: possible_target,
-            captures: None,
-        });
-        bitboard
-            .state
-            .view_bits_mut::<Lsb0>()
-            .set(possible_target, true);
+            let target_piece_type = board.piece_list[possible_target];
+
+            let target_piece = board.get_piece_at_pos(possible_target);
+            let resulting_move = Move {
+                start: piece.position,
+                target: possible_target,
+                is_pawn_double: step == 2,
+                captures: target_piece,
+            };
+            if target_piece_type == PieceType::None {
+                // Nothing is there, do not process based on team
+                // Register a capture
+                psuedolegalize_move(
+                    &mut computed_moves,
+                    &mut bitboard,
+                    resulting_move,
+                    is_square_attackable(board, piece, possible_target) && offset_index == 1,
+                );
+            } else {
+                psuedolegalize_move(
+                    &mut computed_moves,
+                    &mut bitboard,
+                    resulting_move,
+                    is_square_attackable(board, piece, possible_target) && offset_index != 1,
+                );
+                // Can't jump over it
+                break 'step_ray;
+            }
+        }
+        offset_index += 1;
     }
+
+    // en passant
+    if let Some(en_pass) = board.en_passant_square {
+        if en_pass.abs_diff(piece.position) == 1 {
+            let target_piece_type = board.piece_list[en_pass];
+            let target_piece = board.get_piece_at_pos(en_pass);
+
+            let resulting_move = Move {
+                start: piece.position,
+                target: en_pass,
+                is_pawn_double: false,
+                captures: target_piece,
+            };
+
+            psuedolegalize_move(
+                &mut computed_moves,
+                &mut bitboard,
+                resulting_move,
+                is_square_attackable(board, piece, en_pass),
+            );
+        }
+    }
+
     (bitboard, computed_moves)
 }
 
@@ -134,7 +197,6 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
     // Push in each available direction for the rider until it hits an edge or an occupied spot.
     let square_bit_index = piece.position;
     for index in index_start..index_end {
-        let edges_from_here = board.edge_compute[square_bit_index].clone();
         let mut indexed_direction = board.edge_compute[square_bit_index][index];
 
         if indexed_direction >= 1 {
@@ -171,12 +233,20 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
 
             let target_piece_type = board.piece_list[possible_target];
 
-            let target_team = board.get_square_team(possible_target);
-
-            bitboard.state.view_bits_mut::<Lsb0>().set(
-                possible_target,
+            let target_piece = board.get_piece_at_pos(possible_target);
+            let resulting_move = Move {
+                start: piece.position,
+                target: possible_target,
+                is_pawn_double: false,
+                captures: target_piece,
+            };
+            psuedolegalize_move(
+                &mut computed_moves,
+                &mut bitboard,
+                resulting_move,
                 is_square_attackable(board, piece, possible_target),
             );
+
             if target_piece_type != PieceType::None {
                 // Piece blocks further movement in this direction
                 break 'raycast_check;
@@ -189,7 +259,7 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
 // For nightrider, we could do this recursively until we get 0 results
 pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
     let knight_moves: [i32; 8] = [10, 17, -10, -17, 15, -15, 6, -6];
-    let computed_moves: Vec<Move> = Vec::new();
+    let mut computed_moves: Vec<Move> = Vec::new();
     let mut bitboard = Bitboard::default();
 
     for knight_square in knight_moves {
@@ -199,9 +269,29 @@ pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
         };
         let target_piece_type = board.piece_list[possible_target];
 
+        let target_piece = board.get_piece_at_pos(possible_target);
+        let resulting_move = Move {
+            start: piece.position,
+            target: possible_target,
+            is_pawn_double: false,
+            captures: target_piece,
+        };
+        psuedolegalize_move(
+            &mut computed_moves,
+            &mut bitboard,
+            resulting_move,
+            is_square_attackable(board, piece, possible_target),
+        );
+
+        // Disable stuff that lets you loop around the board, which seems to only happen laterally.
+        // Do this by ignoring anything that is on file A/B if you're on H/G and vice versa
+        let target_file = possible_target % 8;
+        let start_file = piece.position % 8;
+
         bitboard.state.view_bits_mut::<Lsb0>().set(
             possible_target,
-            is_square_attackable(board, piece, possible_target),
+            is_square_attackable(board, piece, possible_target)
+                && target_file.abs_diff(start_file) < 5,
         );
     }
 

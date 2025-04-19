@@ -71,10 +71,11 @@ pub struct BoardState {
     pub to_move: Team,
     pub castling_rights: u8, // Using queen, king, and each side as booleans, there are 4 bits of castling rights that can be expressed as a number
     pub fifty_move_clock: i64,
-    pub en_passant_move: Option<u64>,
+    pub en_passant_square: Option<usize>,
     pub turn_clock: i64,
     pub piece_list: Vec<PieceType>,
     pub edge_compute: Vec<Vec<usize>>,
+    pub capture_bitboard: Vec<Bitboard>
 }
 impl Default for BoardState {
     fn default() -> Self {
@@ -84,15 +85,14 @@ impl Default for BoardState {
             castling_rights: 0,
             fifty_move_clock: 0,
             turn_clock: 1,
-            en_passant_move: None,
+            en_passant_square: None,
             piece_list: vec![PieceType::None; 64], // TODO: Make this compatible with any amount of squares/any size of map. Maybe as a type argument to the board state?
             edge_compute: compute_edges(),
+            capture_bitboard: vec![Bitboard { state: 0 }; 2],
         }
     }
 }
 impl BoardState {
-    // TODO: constructor from a board state + a move
-
     // Constructs a board state from a FEN string
     pub fn from_fen(fen: String) -> Result<Self, FENErr> {
         let mut fen_part_idx = 0;
@@ -242,9 +242,9 @@ impl BoardState {
                 4 => {
                     if fen_part.len() < 2 {
                         // Not enough to count this
-                        result_obj.en_passant_move = None;
+                        result_obj.en_passant_square = None;
                     } else {
-                        result_obj.en_passant_move = Bitboard::al_notation_to_bit_idx(fen_part)
+                        result_obj.en_passant_square = Bitboard::al_notation_to_bit_idx(fen_part)
                     }
                 }
                 5 => {
@@ -266,6 +266,7 @@ impl BoardState {
         }
 
         result_obj.init_piece_list();
+        result_obj.update_capture_bitboards();
         Ok(result_obj)
     }
 
@@ -299,6 +300,57 @@ impl BoardState {
             }
         }
     }
+       
+    fn move_piece(&mut self, square_team: Team, moving_piece_type: PieceType, r#move: Move) {
+        let board_pieces = &mut self.board_pieces;
+
+        if square_team == Team::White {
+            board_pieces[Team::White as usize][moving_piece_type as usize]
+                .state
+                .view_bits_mut::<Lsb0>()
+                .set(r#move.start, false);
+            board_pieces[Team::White as usize][moving_piece_type as usize]
+                .state
+                .view_bits_mut::<Lsb0>()
+                .set(r#move.target, true);
+
+            board_pieces[Team::Black as usize]
+                .iter_mut()
+                .for_each(|bb| {
+                    bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
+                });
+        } else {
+            board_pieces[Team::Black as usize][moving_piece_type as usize]
+                .state
+                .view_bits_mut::<Lsb0>()
+                .set(r#move.start, false);
+            board_pieces[Team::Black as usize][moving_piece_type as usize]
+                .state
+                .view_bits_mut::<Lsb0>()
+                .set(r#move.target, true);
+
+            // Clear the slot for the piece - this resembles a capture
+            board_pieces[Team::White as usize]
+                .iter_mut()
+                .for_each(|bb| {
+                    bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
+                });
+        }
+
+        self.piece_list[r#move.start] = PieceType::None;
+        self.piece_list[r#move.target] = moving_piece_type;
+    }
+    fn update_capture_bitboards(&mut self) {
+        for team_id in 0..Team::Black as usize {
+        let mut capture_bitboard = Bitboard::default();
+        let legals = self.get_psuedolegal_moves(); // TODO: Make these legal moves
+
+        for square in 0..64 {
+            capture_bitboard &= legals[square].0;
+        }
+        self.capture_bitboard[team_id] = capture_bitboard;
+    }
+    }
     pub fn render_piece_list(pl: Vec<PieceType>) {
         print!("  a b c d e f g h");
 
@@ -321,7 +373,6 @@ impl BoardState {
         }
         print!("\n");
     }
-
     pub fn get_team_coverage(&self, team: Team) -> Bitboard {
         let mut result = Bitboard::default();
 
@@ -337,11 +388,7 @@ impl BoardState {
         let mut move_list: Vec<(Bitboard, Vec<Move>)> = Vec::new(); // The bitboard is used for highlighting moves the selected square has
         pl.iter().enumerate().for_each(|(index, piece_type)| {
             let default_push = (Bitboard::default(),
-            vec![Move {
-                start: index,
-                target: index,
-                captures: None,
-            }]);
+            vec![Move::default()]);
 
             let team_opt = self.get_square_team(index);
             if let Some(team) = team_opt {
@@ -406,52 +453,10 @@ impl BoardState {
         };
         square_team
     }
-
-    fn move_piece(&mut self, square_team: Team, moving_piece_type: PieceType, r#move: Move) {
-        let board_pieces = &mut self.board_pieces;
-
-        if square_team == Team::White {
-            board_pieces[Team::White as usize][moving_piece_type as usize]
-                .state
-                .view_bits_mut::<Lsb0>()
-                .set(r#move.start, false);
-            board_pieces[Team::White as usize][moving_piece_type as usize]
-                .state
-                .view_bits_mut::<Lsb0>()
-                .set(r#move.target, true);
-
-            board_pieces[Team::Black as usize]
-                .iter_mut()
-                .for_each(|bb| {
-                    bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
-                });
-        } else {
-            board_pieces[Team::Black as usize][moving_piece_type as usize]
-                .state
-                .view_bits_mut::<Lsb0>()
-                .set(r#move.start, false);
-            board_pieces[Team::Black as usize][moving_piece_type as usize]
-                .state
-                .view_bits_mut::<Lsb0>()
-                .set(r#move.target, true);
-
-            // Clear the slot for the piece - this resembles a capture
-            board_pieces[Team::White as usize]
-                .iter_mut()
-                .for_each(|bb| {
-                    bb.state.view_bits_mut::<Lsb0>().set(r#move.target, false);
-                });
-        }
-
-        self.piece_list[r#move.start] = PieceType::None;
-        self.piece_list[r#move.target] = moving_piece_type;
-    }
     pub fn make_move(&mut self, r#move: Move) -> Result<(), MoveError> {
-        let board_pieces = self.board_pieces.concat();
+        
         // Update out of the target positions
         let moving_piece_type = self.piece_list[r#move.start];
-        let target_piece_type = self.piece_list[r#move.target];
-
         let square_team_opt = self.get_square_team(r#move.start);
         let target_team_opt = self.get_square_team(r#move.target);
 
@@ -468,7 +473,25 @@ impl BoardState {
             tracing::debug!("{square_team:?} {moving_piece_type:?} {move:?}");
 
             self.move_piece(square_team, moving_piece_type, r#move);
+            self.en_passant_square = if (r#move.is_pawn_double) {Some(r#move.target)} else {self.en_passant_square};
+            self.update_capture_bitboards();
         }
         return Ok(());
+    }
+    pub fn get_piece_at_pos(&self, pos: usize) -> Option<Piece> {
+        
+        let target_piece_type = self.piece_list[pos];
+
+        let target_piece = if target_piece_type == PieceType::None { 
+            Some(Piece {
+                team: self.get_square_team(pos).unwrap_or(Team::None),
+                position: pos,
+                piece_type: target_piece_type
+            })
+        } else {
+            None
+        };
+
+        target_piece
     }
 }
