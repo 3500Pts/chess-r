@@ -14,7 +14,11 @@ pub struct Move {
     pub target: usize,
     pub captures: Option<PieceType>
 }
-
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum MoveError {
+    AttackedAlly,
+    NoUnit,
+}
 // Compute path for rooks, queens, bishops. Requires pre-computed edges
 pub fn compute_rider(square_bit_index: usize, piece: Piece, edge_compute: Vec<Vec<usize>>) {
     let index_start = if piece.piece_type == PieceType::Bishop { 4 } else { 0 };

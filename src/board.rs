@@ -4,7 +4,7 @@ use bitvec::{
 };
 use ggez::context::HasMut;
 
-use crate::{bitboard::*, r#move::Move};
+use crate::{bitboard::*, r#move::{Move, MoveError}};
 use std::{
     collections::HashMap,
     fmt::{self},
@@ -405,7 +405,7 @@ impl BoardState {
         self.piece_list[r#move.start] = PieceType::None;
         self.piece_list[r#move.target] = moving_piece_type;
     }
-    pub fn make_move(&mut self, r#move: Move) -> &BoardState {
+    pub fn make_move(&mut self, r#move: Move) -> Result<(), MoveError> {
         let mut board_pieces = self.board_pieces.concat();
         // Update out of the target positions
         let moving_piece_type = self.piece_list[r#move.start];
@@ -415,21 +415,16 @@ impl BoardState {
         let target_team_opt = self.get_square_team(r#move.target);
 
         if square_team_opt == None {
-            println!("Did not drag a unit");
-            return self;
+            return Err(MoveError::NoUnit)
         }
         if target_team_opt == square_team_opt {
-            println!("Tried to attack ally");
-            return self;
-        } // Return and fail the movement if the target piece and this piece are on the same team
-
+            return Err(MoveError::AttackedAlly)
+        } 
         if let Some(square_team) = square_team_opt {
-            println!("{square_team:?} {moving_piece_type:?} {move:?}");
+            tracing::debug!("{square_team:?} {moving_piece_type:?} {move:?}");
 
             self.move_piece(square_team, moving_piece_type, r#move);
-        } else {
-            println!("Didn't make move because it was not coherent")
         }
-        return self;
+        return Ok(())
     }
 }
