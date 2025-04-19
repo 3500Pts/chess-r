@@ -1,8 +1,8 @@
-use bitvec::{order::Lsb0, view::BitView};
+use bitvec::{order::Lsb0, vec, view::BitView};
 
 use crate::{
     bitboard::*,
-    r#move::{compute_knight, compute_pawn, compute_slider, Move, MoveError, Piece},
+    r#move::{self, compute_knight, compute_pawn, compute_slider, Move, MoveError, Piece},
 };
 use std::{
     collections::HashMap,
@@ -352,7 +352,7 @@ impl BoardState {
         let legals = self.get_psuedolegal_moves(); // TODO: Make these legal moves
 
         for square in 0..64 {
-            capture_bitboard &= legals[square].0;
+            capture_bitboard |= legals[square].0;
         }
         self.capture_bitboard[team_id] = capture_bitboard;
     }
@@ -428,29 +428,49 @@ impl BoardState {
         move_list
     }
     pub fn get_legal_moves(&self) -> Vec<(Bitboard, Vec<Move>)> {
-        let mut legal_moves = self.get_psuedolegal_moves(); 
+        let pl_moves = self.get_psuedolegal_moves(); 
+        let mut legal_moves: Vec<(Bitboard, Vec<Move>)> = Vec::new();
+
         // This is a list of what moves are available from what square, let's cut that down by active team
-        legal_moves.iter_mut().for_each(|(bitboard, move_vector)| {
+        for (mut bitboard, move_vector) in pl_moves {
             // Check 
-            move_vector.iter().filter(|available_move| {
-                
+            let mut lm_vector: Vec<Move> = Vec::new();
+
+            move_vector.iter().for_each(|available_move| {
                 let mut testing_board = self.clone(); // EXPENSIVE? TODO: Decide whether or not to keep this
                 let team_moving = testing_board.get_square_team(available_move.start).unwrap_or(Team::None);
-                testing_board.make_move(**available_move);
-             
-                let enemy_capture_bitboard = testing_board.capture_bitboard[Team::White as usize] & testing_board.capture_bitboard[Team::Black as usize] & testing_board.capture_bitboard[Team::Red as usize] & !testing_board.capture_bitboard[team_moving as usize];
+                let move_att = testing_board.make_move(*available_move);
+                
+                if move_att.is_ok() {
+                    let enemy_capture_bitboard = (testing_board.capture_bitboard[Team::White as usize] | testing_board.capture_bitboard[Team::Black as usize]);
 
-                if (enemy_capture_bitboard & !testing_board.board_pieces[team_moving as usize][PieceType::King as usize]).state > 0 {
-                    // This move would expose the king - not allowed
-                    bitboard.state.view_bits_mut::<Lsb0>().set(available_move.target, false);
-                    return true
-                } 
-                false 
+                    let move_selfchecks = (enemy_capture_bitboard & testing_board.board_pieces[team_moving as usize][PieceType::King as usize]);
+                   
+                    if move_selfchecks.state > 0 { 
+                        bitboard.state.view_bits_mut::<Lsb0>().set(available_move.target, false);
+                    } else {
+                        lm_vector.push(*available_move);
+                    }
+                }
             });
+
+            legal_moves.push((bitboard, lm_vector))
         
-        });
+        };
 
         legal_moves
+    }
+    pub fn prune_moves_for_team(&self, move_list:Vec<(Bitboard, Vec<Move>)>, team: Team) -> Vec<Move> {
+        let mut pruned_list: Vec<Move> = Vec::new();
+        move_list.iter().for_each(|(_, move_vector)| {
+            move_vector.iter().for_each(|available_move| {
+                let team_moving = self.get_square_team(available_move.start).unwrap_or(Team::None);
+                if (team_moving == team) {
+                    pruned_list.push(*available_move);
+                }
+            })
+        });
+        pruned_list
     }
     pub fn get_square_team(&self, square_idx: usize) -> Option<Team> {
         let white_check = self.get_team_coverage(Team::White);

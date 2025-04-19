@@ -22,9 +22,12 @@ use crate::bitboard::Bitboard;
 use crate::bitboard::PIECE_TYPE_ARRAY;
 use crate::bitboard::PieceType;
 use crate::bitboard::Team;
+use crate::board;
 use crate::board::BoardState;
 use crate::r#move::Move;
 use crate::opponents;
+use crate::opponents::Randy;
+use crate::opponents::ChessOpponent;
 
 pub type ColorRGBA = [f32; 4];
 
@@ -61,6 +64,7 @@ pub struct MainState {
     last_move_origin: Option<usize>,
     last_move_end: Option<usize>,
     player_team: Team,
+    opponent: Randy
 }
 
 impl MainState {
@@ -81,6 +85,7 @@ impl MainState {
             last_move_origin: None,
             last_move_end: None,
             player_team: plr_team,
+            opponent: Randy {}
         };
         s.board_legal_moves = Some(s.board.get_legal_moves());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
@@ -154,7 +159,8 @@ impl MainState {
                             .view_bits::<Lsb0>()
                             .get(square_number);
 
-                        if status_on_bitboard.unwrap().then_some(true).is_some() {
+                        let board_team = self.board.get_square_team(selected_square).unwrap_or(Team::None);
+                        if status_on_bitboard.unwrap().then_some(true).is_some() && self.player_team == board_team {
                             color_lerp(
                                 Color::from(SELECTED_SQUARE_COLOR),
                                 default_color,
@@ -403,6 +409,20 @@ impl event::EventHandler<ggez::GameError> for MainState {
         }
         self.draw_board(ctx, &mut canvas)?;
         self.draw_pieces(ctx, &mut canvas)?;
+
+        // Queue a move for the opponent if necessary
+        self.queued_move = if self.player_team != self.board.active_team {
+            let legal = self.opponent.get_move(self.board.clone());
+            if legal.is_some() {
+                legal
+            } else {
+                // Check/stalemate
+                println!("Stalemate/checkmate: {:?} wins", self.player_team);
+                self.queued_move
+            }
+        } else {
+            self.queued_move
+        };
         canvas.finish(ctx)?;
         Ok(())
     }
