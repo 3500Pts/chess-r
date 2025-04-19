@@ -427,6 +427,31 @@ impl BoardState {
 
         move_list
     }
+    pub fn get_legal_moves(&self) -> Vec<(Bitboard, Vec<Move>)> {
+        let mut legal_moves = self.get_psuedolegal_moves(); 
+        // This is a list of what moves are available from what square, let's cut that down by active team
+        legal_moves.iter_mut().for_each(|(bitboard, move_vector)| {
+            // Check 
+            move_vector.iter().filter(|available_move| {
+                
+                let mut testing_board = self.clone(); // EXPENSIVE? TODO: Decide whether or not to keep this
+                let team_moving = testing_board.get_square_team(available_move.start).unwrap_or(Team::None);
+                testing_board.make_move(**available_move);
+             
+                let enemy_capture_bitboard = testing_board.capture_bitboard[Team::White as usize] & testing_board.capture_bitboard[Team::Black as usize] & testing_board.capture_bitboard[Team::Red as usize] & !testing_board.capture_bitboard[team_moving as usize];
+
+                if (enemy_capture_bitboard & !testing_board.board_pieces[team_moving as usize][PieceType::King as usize]).state > 0 {
+                    // This move would expose the king - not allowed
+                    bitboard.state.view_bits_mut::<Lsb0>().set(available_move.target, false);
+                    return true
+                } 
+                false 
+            });
+        
+        });
+
+        legal_moves
+    }
     pub fn get_square_team(&self, square_idx: usize) -> Option<Team> {
         let white_check = self.get_team_coverage(Team::White);
         let black_check = self.get_team_coverage(Team::Black);

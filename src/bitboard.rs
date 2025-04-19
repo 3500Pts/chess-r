@@ -1,6 +1,6 @@
 use std::{
     fmt::{self},
-    ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign},
+    ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not},
 };
 
 // bitboard.rs
@@ -100,6 +100,14 @@ impl BitOr for Bitboard {
 impl BitOrAssign for Bitboard {
     fn bitor_assign(&mut self, rhs: Self) {
         self.state |= rhs.state
+    }
+}
+impl Not for Bitboard {
+    type Output = Self;
+    fn not(self) -> Self::Output {
+        return Bitboard {
+            state: !self.state 
+        };
     }
 }
 impl BitAnd for Bitboard {

@@ -82,7 +82,7 @@ impl MainState {
             last_move_end: None,
             player_team: plr_team,
         };
-        s.board_legal_moves = Some(s.board.get_psuedolegal_moves());
+        s.board_legal_moves = Some(s.board.get_legal_moves());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
 
         let mut piece_ids: Vec<String> = Vec::new();
@@ -387,7 +387,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 self.last_move_origin = Some(c_move.start);
                 self.last_move_end = Some(c_move.target);
                 // Regenerate moves
-                self.board_legal_moves = Some(self.board.get_psuedolegal_moves())
+                self.board_legal_moves = Some(self.board.get_legal_moves())
             }
 
             tracing::debug!(
