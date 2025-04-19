@@ -1,12 +1,8 @@
 use std::collections::HashMap;
 
-use bitvec::order::Lsb0;
-use bitvec::order::Msb0;
-use bitvec::view::BitView;
 use ggez::audio::SoundSource;
 use ggez::audio::Source;
 use ggez::GameError;
-use ggez::conf::WindowSetup;
 use ggez::event;
 use ggez::glam::*;
 use ggez::graphics::Canvas;
@@ -28,11 +24,16 @@ use crate::r#move::Move;
 pub type ColorRGBA = [f32; 4];
 
 const BLACK: ColorRGBA = [0.2, 0.2, 0.2, 1.0];
+const SELECTED_SQUARE_COLOR: ColorRGBA = [1.0, 1.0, 1.0, 1.0];
+const LEGAL_MOVE_COLOR: ColorRGBA = [0.5, 0.5, 0.5, 1.0];
+const LEGAL_CAP_COLOR: ColorRGBA = [0.25, 0.25, 0.25, 1.0];
+const ORIGIN_COLOR: ColorRGBA = [0.0, 0.0, 1.0, 1.0];
+const ANTI_ORIGIN_COLOR: ColorRGBA = [0.0, 1.0, 1.0, 1.0];
 const LIGHT_SQUARE_COLOR: ColorRGBA = [0.941, 0.467, 0.467, 1.0];
 const DARK_SQUARE_COLOR: ColorRGBA = [0.651, 0.141, 0.141, 1.0];
 const WIDTH: f32 = 600.0;
-const HEIGHT: f32 = 800.0;
 const SQUARE_SIZE: f32 = WIDTH / 8.0;
+const FLAG_DEBUG_UI_COORDS: bool = false;
 
 pub struct MainState {
     board: BoardState,
@@ -106,9 +107,17 @@ impl MainState {
         Ok(s)
     }
     fn draw_board(&mut self, ctx: &mut Context, canvas: &mut Canvas) -> GameResult<()> {
-        for rank in (0..8).rev() {
-            for file in (0..8) {
-                let color = if (rank + file) % 2 == 0 {
+        for rank in 0..8 {
+        for file in 0..8 {
+                let square_number = 63 - (((7 - rank) * 8) + file) as usize;
+                let color = 
+                if square_number == 0 && FLAG_DEBUG_UI_COORDS {
+                    Color::from(ORIGIN_COLOR)
+                } else if square_number == 6 && FLAG_DEBUG_UI_COORDS {
+                    Color::from(ANTI_ORIGIN_COLOR)
+                } else if Some(square_number) == self.selected_square {
+                    Color::from(SELECTED_SQUARE_COLOR)
+                } else if (rank + file) % 2 == 0 {
                     Color::from(LIGHT_SQUARE_COLOR)
                 } else {
                     Color::from(DARK_SQUARE_COLOR)
@@ -118,8 +127,8 @@ impl MainState {
                     ctx,
                     graphics::DrawMode::fill(),
                     Rect {
-                        x: rank as f32 * SQUARE_SIZE,
-                        y: file as f32 * SQUARE_SIZE,
+                        x: file as f32 * SQUARE_SIZE,
+                        y: (7 - rank) as f32 * SQUARE_SIZE,
                         h: SQUARE_SIZE,
                         w: SQUARE_SIZE,
                     },
@@ -138,14 +147,14 @@ impl MainState {
 
         for rank in (0..8).rev() {
             for file in 0..8 {
-                let square_bit_idx = ((rank * 8) + file) as usize;
+                let square_bit_idx = 63 - ((rank * 8) + file) as usize;
 
                 let square_team_opt = self.board.get_square_team(square_bit_idx);
 
                 if let Some(square_team) = square_team_opt {
                     // We use the team id to compose the team part of the file name
                     let file_team =
-                        String::from(if square_team == Team::White { "b" } else { "w" });
+                        String::from(if square_team == Team::White { "w" } else { "b" });
 
                     if square_bit_idx == 0 {
                         //println!("{square_team:?}")
@@ -202,8 +211,7 @@ impl MainState {
         let file = (x / SQUARE_SIZE).floor();
         let rank = (y / SQUARE_SIZE).floor();
 
-        println!("r{}|f{}", rank, file);
-        return (rank * 8.0) + file;
+        return 63.0 - ((rank * 8.0) + file);
     }
     fn play_sound(&mut self, ctx: &mut Context, id: &str, volume: f32) -> GameResult<()> {
         let sound = self.sound_sources.get_mut(id).unwrap();
@@ -226,7 +234,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
     ) -> Result<(), ggez::GameError> {
         if button == event::MouseButton::Left {
             let square_idx = MainState::get_square_idx_from_pixel(x, y) as usize;
-            println!("Clicked square {}", square_idx);
+            tracing::debug!("Mouse down on square {}", square_idx);
 
             // If there's a piece here, "select" the piece at this index to drag
             self.selected_square = Some(square_idx);
@@ -245,8 +253,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
         // Do drag effect on the piece at the currently selected square
         if let Some(start_square) = self.selected_square {
             let start_square = start_square as f32;
-            let start_x = ((start_square % 8.0) * SQUARE_SIZE);
-            let start_y = ((start_square / 8.0) * SQUARE_SIZE);
+            let start_x = (start_square % 8.0) * SQUARE_SIZE;
+            let start_y = (start_square / 8.0) * SQUARE_SIZE;
 
             self.drag_x = Some(x - (0.5 * SQUARE_SIZE));
             self.drag_y = Some(y - (0.5 * SQUARE_SIZE));
@@ -262,7 +270,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
     ) -> Result<(), ggez::GameError> {
         if button == event::MouseButton::Left && self.queued_move == None {
             let target_square_idx = MainState::get_square_idx_from_pixel(x, y) as usize;
-            println!("Ended click at square {}", target_square_idx);
+            tracing::debug!("Mouse up at square {}", target_square_idx);
             // Attempt a move here
             if let Some(start_square) = self.selected_square {
                 self.queued_move = Some(Move {
@@ -285,9 +293,9 @@ impl event::EventHandler<ggez::GameError> for MainState {
         if let Some(c_move) = self.queued_move {
             let bit_pre = self.board.piece_list.clone();
 
-            self.board.make_move(c_move);
-
-            self.play_sound(ctx, "piece_move", 0.1)?;
+            if let Ok(()) = self.board.make_move(c_move) {
+                self.play_sound(ctx, "piece_move", 0.1)?;
+            }
 
             tracing::debug!("White bitboard after move: {}", self.board.get_team_coverage(Team::White));
             tracing::debug!("Black bitboard after move: {}", self.board.get_team_coverage(Team::Black));

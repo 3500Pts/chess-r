@@ -1,23 +1,16 @@
 use bitvec::{
-    order::{Lsb0, Msb0},
+    order::Lsb0,
     view::BitView,
 };
-use ggez::context::HasMut;
 
-use crate::{bitboard::*, r#move::Move};
+use crate::{bitboard::*, r#move::{Move, MoveError}};
 use std::{
     collections::HashMap,
     fmt::{self},
-    ops::BitOr,
 };
 
-const FEN_NR_OF_PARTS: usize = 6;
 const LIST_OF_PIECES: &str = "kqrbnpKQRBNP";
-const WHITE_OR_BLACK: &str = "wb";
 const SPLITTER: char = '/';
-const DASH: char = '-';
-const EM_DASH: char = '–';
-const SPACE: char = ' ';
 
 // Returns a table of the distance to the edges of the board for every square where index 0 of a square's table is the distance to the top, 1 is bottom, 2 is right, 3 is left, 4 is topright, 5 is bottomright, 6 is bottomleft, 7 is topleft.
 pub fn compute_edges() -> Vec<Vec<usize>> {
@@ -405,8 +398,8 @@ impl BoardState {
         self.piece_list[r#move.start] = PieceType::None;
         self.piece_list[r#move.target] = moving_piece_type;
     }
-    pub fn make_move(&mut self, r#move: Move) -> &BoardState {
-        let mut board_pieces = self.board_pieces.concat();
+    pub fn make_move(&mut self, r#move: Move) -> Result<(), MoveError> {
+        let board_pieces = self.board_pieces.concat();
         // Update out of the target positions
         let moving_piece_type = self.piece_list[r#move.start];
         let target_piece_type = self.piece_list[r#move.target];
@@ -415,21 +408,16 @@ impl BoardState {
         let target_team_opt = self.get_square_team(r#move.target);
 
         if square_team_opt == None {
-            println!("Did not drag a unit");
-            return self;
+            return Err(MoveError::NoUnit)
         }
         if target_team_opt == square_team_opt {
-            println!("Tried to attack ally");
-            return self;
-        } // Return and fail the movement if the target piece and this piece are on the same team
-
+            return Err(MoveError::AttackedAlly)
+        } 
         if let Some(square_team) = square_team_opt {
-            println!("{square_team:?} {moving_piece_type:?} {move:?}");
+            tracing::debug!("{square_team:?} {moving_piece_type:?} {move:?}");
 
             self.move_piece(square_team, moving_piece_type, r#move);
-        } else {
-            println!("Didn't make move because it was not coherent")
         }
-        return self;
+        return Ok(())
     }
 }

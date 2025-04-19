@@ -11,11 +11,8 @@ const RANDOM_GAME_POS: &str = "rnb1kbnr/pqpp3p/1p2ppp1/8/4P3/PPN5/2PPBPPP/R1BQ1R
 
 use bitboard::Team;
 use board::BoardState;
-use ggez::conf::{WindowMode, WindowSetup};
+use ggez::conf::WindowSetup;
 use ggez::event;
-use ggez::graphics::{self, Color};
-use ggez::{Context, GameResult};
-use ggez::glam::*;
 use ui::MainState;
 
 pub fn main() {
