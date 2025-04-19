@@ -29,6 +29,7 @@ pub type ColorRGBA = [f32; 4];
 
 const BLACK: ColorRGBA = [0.2, 0.2, 0.2, 1.0];
 const SELECTED_SQUARE_COLOR: ColorRGBA = [1.0, 1.0, 1.0, 1.0];
+const OLD_MOVE_COLOR: ColorRGBA = [1.0, 0.8, 0.25, 1.0];
 const LEGAL_MOVE_COLOR_LERP: f32 = 0.3;
 const LEGAL_CAP_COLOR_LERP: f32 = 0.5;
 const ORIGIN_COLOR: ColorRGBA = [0.0, 0.0, 1.0, 1.0];
@@ -60,6 +61,7 @@ pub struct MainState {
     drag_y: Option<f32>,
     board_legal_moves: Option<Vec<(Bitboard, Vec<Move>)>>,
     last_move_origin: Option<usize>,
+    last_move_end: Option<usize>,
 }
 
 impl MainState {
@@ -73,7 +75,8 @@ impl MainState {
             drag_x: None,
             drag_y: None,
             board_legal_moves: None,
-            last_move_origin: None
+            last_move_origin: None,
+            last_move_end: None,
         };
         s.board_legal_moves = Some(s.board.get_psuedolegal_moves());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
@@ -164,7 +167,9 @@ impl MainState {
                         default_color
                     }
                 } else if Some(square_number) == self.last_move_origin {
-                    color_lerp(Color::from(SELECTED_SQUARE_COLOR), default_color, 0.9)
+                    color_lerp(Color::from(OLD_MOVE_COLOR), default_color, 0.7)
+                } else if Some(square_number) == self.last_move_end {
+                    color_lerp(Color::from(OLD_MOVE_COLOR), default_color, 0.3)
                 } else {
                     default_color
                 };
@@ -360,10 +365,10 @@ impl event::EventHandler<ggez::GameError> for MainState {
         let mut canvas = graphics::Canvas::from_frame(ctx, Some(graphics::Color::from(BLACK)));
 
         if let Some(c_move) = self.queued_move {
-            let bit_pre = self.board.piece_list.clone();
-
             if let Ok(()) = self.board.make_move(c_move) {
                 self.play_sound(ctx, "piece_move", 0.1)?;
+                self.last_move_origin = Some(c_move.start);
+                self.last_move_end = Some(c_move.target);
                 // Regenerate moves
                 self.board_legal_moves = Some(self.board.get_psuedolegal_moves())
             }
