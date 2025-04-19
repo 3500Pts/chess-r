@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use bitvec::order::Lsb0;
-use bitvec::store::BitStore;
 use bitvec::view::BitView;
 use ggez::GameError;
 use ggez::audio::SoundSource;
@@ -12,6 +11,7 @@ use ggez::graphics::Canvas;
 use ggez::graphics::DrawParam;
 use ggez::graphics::Image;
 use ggez::graphics::Rect;
+use ggez::graphics::Text;
 use ggez::graphics::Transform;
 use ggez::graphics::{self, Color};
 use ggez::mint::Point2;
@@ -31,14 +31,11 @@ const BLACK: ColorRGBA = [0.2, 0.2, 0.2, 1.0];
 const SELECTED_SQUARE_COLOR: ColorRGBA = [1.0, 1.0, 1.0, 1.0];
 const OLD_MOVE_COLOR: ColorRGBA = [1.0, 0.8, 0.25, 1.0];
 const LEGAL_MOVE_COLOR_LERP: f32 = 0.3;
-const LEGAL_CAP_COLOR_LERP: f32 = 0.5;
-const ORIGIN_COLOR: ColorRGBA = [0.0, 0.0, 1.0, 1.0];
-const ANTI_ORIGIN_COLOR: ColorRGBA = [0.0, 1.0, 1.0, 1.0];
 const LIGHT_SQUARE_COLOR: ColorRGBA = [0.941, 0.467, 0.467, 1.0];
 const DARK_SQUARE_COLOR: ColorRGBA = [0.651, 0.141, 0.141, 1.0];
 const WIDTH: f32 = 600.0;
 const SQUARE_SIZE: f32 = WIDTH / 8.0;
-const FLAG_DEBUG_UI_COORDS: bool = false;
+const FLAG_DEBUG_UI_COORDS: bool = true;
 
 pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
@@ -140,11 +137,7 @@ impl MainState {
                 } else {
                     Color::from(DARK_SQUARE_COLOR)
                 };
-                let color = if square_number == 0 && FLAG_DEBUG_UI_COORDS {
-                    Color::from(ORIGIN_COLOR)
-                } else if square_number == 6 && FLAG_DEBUG_UI_COORDS {
-                    Color::from(ANTI_ORIGIN_COLOR)
-                } else if Some(square_number) == self.selected_square {
+                let color = if Some(square_number) == self.selected_square {
                     Color::from(SELECTED_SQUARE_COLOR)
                 } else if let Some(selected_square) = self.selected_square {
                     if let Some(pl_moves) = &self.board_legal_moves {
@@ -186,12 +179,38 @@ impl MainState {
                     color,
                 )?;
 
+                let sqr_txt = square_number.to_string();
+
                 canvas.draw(&square_mesh, DrawParam::default());
+
+                // DRAW DEBUG SQUARE ID TEXT
+                if FLAG_DEBUG_UI_COORDS {
+                    let mut text_mesh = Text::new(sqr_txt);
+                    text_mesh.set_bounds(Vector2 {
+                        x: SQUARE_SIZE,
+                        y: SQUARE_SIZE,
+                    });
+                    canvas.draw(
+                        &text_mesh,
+                        DrawParam::default().transform({
+                            Transform::Values {
+                                dest: Point2 {
+                                    x: file as f32 * SQUARE_SIZE,
+                                    y: (7 - rank) as f32 * SQUARE_SIZE,
+                                },
+                                rotation: 0.0,
+                                scale: Vector2 { x: 1.0, y: 1.0 },
+                                offset: Point2 { x: 0.5, y: 0.5 },
+                            }
+                            .to_bare_matrix()
+                        }),
+                    )
+                }
             }
         }
         Ok(())
     }
-    fn draw_pieces(&mut self, ctx: &mut Context, canvas: &mut Canvas) -> GameResult<()> {
+    fn draw_pieces(&mut self, _ctx: &mut Context, canvas: &mut Canvas) -> GameResult<()> {
         // Map each piece and team in the game state to the image.
         // To do this, use the team bitboard to check the square's team
         // then the piece list to check the square's type
@@ -313,14 +332,10 @@ impl event::EventHandler<ggez::GameError> for MainState {
         _dy: f32,
     ) -> Result<(), ggez::GameError> {
         // Do drag effect on the piece at the currently selected square
-        if let Some(start_square) = self.selected_square {
-            let start_square = start_square as f32;
-            let start_x = (start_square % 8.0) * SQUARE_SIZE;
-            let start_y = (start_square / 8.0) * SQUARE_SIZE;
 
-            self.drag_x = Some(x - (0.5 * SQUARE_SIZE));
-            self.drag_y = Some(y - (0.5 * SQUARE_SIZE));
-        }
+        self.drag_x = Some(x - (0.5 * SQUARE_SIZE));
+        self.drag_y = Some(y - (0.5 * SQUARE_SIZE));
+
         Ok(())
     }
     fn mouse_button_up_event(
