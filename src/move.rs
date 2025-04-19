@@ -161,12 +161,12 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
                 is_pawn_double: false,
                 captures: target_piece,
             };
-
+             
             psuedolegalize_move(
                 &mut computed_moves,
                 &mut bitboard,
                 resulting_move,
-                is_square_attackable(board, piece, en_pass),
+                is_square_attackable(board, piece, en_pass) && board.en_passant_turn.unwrap() == board.turn_clock,
             );
         }
     }

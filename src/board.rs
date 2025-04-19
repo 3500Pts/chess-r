@@ -73,9 +73,12 @@ pub struct BoardState {
     pub fifty_move_clock: i64,
     pub en_passant_square: Option<usize>,
     pub turn_clock: i64,
+    pub ply_clock: i64,
     pub piece_list: Vec<PieceType>,
     pub edge_compute: Vec<Vec<usize>>,
-    pub capture_bitboard: Vec<Bitboard>
+    pub capture_bitboard: Vec<Bitboard>,
+    pub en_passant_turn: Option<i64>,
+    pub active_team: Team,
 }
 impl Default for BoardState {
     fn default() -> Self {
@@ -84,11 +87,14 @@ impl Default for BoardState {
             to_move: Team::White,
             castling_rights: 0,
             fifty_move_clock: 0,
+            ply_clock: 0,
             turn_clock: 1,
             en_passant_square: None,
+            en_passant_turn: None,
             piece_list: vec![PieceType::None; 64], // TODO: Make this compatible with any amount of squares/any size of map. Maybe as a type argument to the board state?
             edge_compute: compute_edges(),
             capture_bitboard: vec![Bitboard { state: 0 }; 2],
+            active_team: Team::White
         }
     }
 }
@@ -474,8 +480,16 @@ impl BoardState {
 
             self.move_piece(square_team, moving_piece_type, r#move);
             self.en_passant_square = if (r#move.is_pawn_double) {Some(r#move.target)} else {self.en_passant_square};
+            self.en_passant_turn = Some(self.turn_clock);
             self.update_capture_bitboards();
+
+            if self.active_team == Team::Black {
+                self.active_team = Team::White
+            } else {
+                self.active_team = Team::Black // TODO: Account for three turn order with red before white
+            }
         }
+        
         return Ok(());
     }
     pub fn get_piece_at_pos(&self, pos: usize) -> Option<Piece> {

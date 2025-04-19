@@ -24,6 +24,7 @@ use crate::bitboard::PieceType;
 use crate::bitboard::Team;
 use crate::board::BoardState;
 use crate::r#move::Move;
+use crate::opponents;
 
 pub type ColorRGBA = [f32; 4];
 
@@ -59,10 +60,15 @@ pub struct MainState {
     board_legal_moves: Option<Vec<(Bitboard, Vec<Move>)>>,
     last_move_origin: Option<usize>,
     last_move_end: Option<usize>,
+    player_team: Team,
 }
 
 impl MainState {
-    pub fn new(board_state: BoardState, ctx: &mut Context) -> GameResult<MainState> {
+    pub fn new(
+        board_state: BoardState,
+        ctx: &mut Context,
+        plr_team: Team,
+    ) -> GameResult<MainState> {
         let mut s = MainState {
             board: board_state,
             piece_imgs: HashMap::new(),
@@ -74,6 +80,7 @@ impl MainState {
             board_legal_moves: None,
             last_move_origin: None,
             last_move_end: None,
+            player_team: plr_team,
         };
         s.board_legal_moves = Some(s.board.get_psuedolegal_moves());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
@@ -352,11 +359,15 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
             if let Some(selected_square) = self.selected_square {
                 if let Some(pl_moves) = &self.board_legal_moves {
-                    self.queued_move = pl_moves[selected_square]
-                        .1
-                        .iter()
-                        .find(|fmove| fmove.target == target_square_idx)
-                        .copied();
+                    self.queued_move = if self.player_team == self.board.active_team {
+                        pl_moves[selected_square]
+                            .1
+                            .iter()
+                            .find(|fmove| fmove.target == target_square_idx)
+                            .copied()
+                    } else {
+                        self.queued_move
+                    };
                 }
             }
             // Drop the square if there is one

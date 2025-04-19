@@ -1,11 +1,12 @@
 [package]
 name = "chess-r"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 authors = ["3500pts"]
 
 [dependencies]
 bitvec = "1.0.1"
 ggez = "0.9.3"
+rand = "0.9.1"
 tracing = "0.1.41"
 tracing-subscriber = {version = "0.3.19", features = ["env-filter"]}
