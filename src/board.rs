@@ -1,12 +1,12 @@
-use bitvec::{order::Lsb0, vec, view::BitView};
+use bitvec::{order::Lsb0, store::BitStore, view::BitView};
 
 use crate::{
     bitboard::*,
-    r#move::{self, compute_knight, compute_pawn, compute_slider, Move, MoveError, Piece},
+    r#move::{Move, MoveError, Piece, compute_knight, compute_pawn, compute_slider},
 };
 use std::{
     collections::HashMap,
-    fmt::{self},
+    fmt::{self}, io::Read,
 };
 
 const LIST_OF_PIECES: &str = "kqrbnpKQRBNP";
@@ -14,7 +14,7 @@ const SPLITTER: char = '/';
 
 // Returns a table of the distance to the edges of the board for every square where index 0 of a square's table is the distance to the top, 1 is bottom, 2 is right, 3 is left, 4 is topright, 5 is bottomright, 6 is bottomleft, 7 is topleft.
 pub fn compute_edges() -> [[usize; 8]; 64] {
-    let mut square_list= [[0; 8]; 64];
+    let mut square_list = [[0; 8]; 64];
 
     for square_pos in 0..square_list.len() {
         let rank = square_pos.div_floor(8);
@@ -73,6 +73,7 @@ pub struct BoardState {
     pub en_passant_square: Option<usize>,
     pub turn_clock: i64,
     pub ply_clock: i64,
+    pub active_team_checkmate: bool,
     pub piece_list: [PieceType; 64],
     pub edge_compute: [[usize; 8]; 64],
     pub capture_bitboard: [Bitboard; 2],
@@ -89,15 +90,18 @@ impl Default for BoardState {
             turn_clock: 1,
             en_passant_square: None,
             en_passant_turn: None,
+            active_team_checkmate: false,
             piece_list: [PieceType::None; 64], // TODO: Make this compatible with any amount of squares/any size of map. Maybe as a type argument to the board state?
             edge_compute: compute_edges(),
             capture_bitboard: [Bitboard { state: 0 }; 2],
-            active_team: Team::White
+            active_team: Team::White,
         }
     }
 }
 impl BoardState {
-    // Constructs a board state from a FEN string
+    /* 
+        Constructs a board state from a FEN string
+    */
     pub fn from_fen(fen: String) -> Result<Self, FENErr> {
         let mut fen_part_idx = 0;
 
@@ -304,7 +308,7 @@ impl BoardState {
             }
         }
     }
-       
+
     fn move_piece(&mut self, square_team: Team, moving_piece_type: PieceType, r#move: Move) {
         let board_pieces = &mut self.board_pieces;
 
@@ -346,13 +350,14 @@ impl BoardState {
     }
     fn update_capture_bitboards(&mut self) {
         for team_id in 0..Team::Black as usize {
-        let mut capture_bitboard = Bitboard::default();
-        let legals = self.get_psuedolegal_moves(); // TODO: Make these legal moves
+            let mut capture_bitboard = Bitboard::default();
+            let legals = self.get_psuedolegal_moves(); // TODO: Make these legal moves
 
-        for square in 0..64 {
-            capture_bitboard |= legals[square].0;
+            for square in 0..64 {
+                capture_bitboard |= legals[square].0;
+            }
+            self.capture_bitboard[team_id] = capture_bitboard;
         }
-        self.capture_bitboard[team_id] = capture_bitboard;
     }
     }
     pub fn render_piece_list(pl: Vec<PieceType>) {
@@ -391,30 +396,22 @@ impl BoardState {
         let pl = self.piece_list.clone();
         let mut move_list: Vec<(Bitboard, Vec<Move>)> = Vec::new(); // The bitboard is used for highlighting moves the selected square has
         pl.iter().enumerate().for_each(|(index, piece_type)| {
-            let default_push = (Bitboard::default(),
-            vec![Move::default()]);
+            let default_push = (Bitboard::default(), vec![Move::default()]);
 
             let team_opt = self.get_square_team(index);
             if let Some(team) = team_opt {
-                let piece_obj =  Piece {
+                let piece_obj = Piece {
                     piece_type: *piece_type,
                     position: index,
                     team: team,
                 };
                 let (psuedo_bitboard, psuedo_moves) = match piece_type {
-                    PieceType::Bishop | PieceType::Rook | &PieceType::Queen | PieceType::King => compute_slider(
-                        self,
-                        piece_obj
-                    ),
-                    PieceType::Knight => compute_knight(
-                        self, 
-                        piece_obj
-                    ),
-                    PieceType::Pawn => compute_pawn(
-                        self,
-                        piece_obj
-                    ),
-                    _ => default_push
+                    PieceType::Bishop | PieceType::Rook | &PieceType::Queen | PieceType::King => {
+                        compute_slider(self, piece_obj)
+                    }
+                    PieceType::Knight => compute_knight(self, piece_obj),
+                    PieceType::Pawn => compute_pawn(self, piece_obj),
+                    _ => default_push,
                 };
 
                 move_list.push((psuedo_bitboard, psuedo_moves));
@@ -423,29 +420,51 @@ impl BoardState {
             }
         });
 
+        // Add castling
+        // K, Q, k q
+        for castling_move in 0..4 {
+            if self
+                .castling_rights
+                .view_bits::<Lsb0>()
+                .get(castling_move)
+                .unwrap()
+                .then_some(1)
+                .is_some()
+            {}
+        }
         move_list
     }
+    pub fn is_team_checked(&self, team: Team) -> bool {
+        let enemy_capture_bitboard = (self.capture_bitboard[Team::White as usize]
+            | self.capture_bitboard[Team::Black as usize]);
+
+        let in_check =
+            (enemy_capture_bitboard & self.board_pieces[team as usize][PieceType::King as usize]);
+
+        in_check.state > 0
+    }
     pub fn get_legal_moves(&self) -> Vec<(Bitboard, Vec<Move>)> {
-        let pl_moves = self.get_psuedolegal_moves(); 
+        let pl_moves = self.get_psuedolegal_moves();
         let mut legal_moves: Vec<(Bitboard, Vec<Move>)> = Vec::new();
 
         // This is a list of what moves are available from what square, let's cut that down by active team
         for (mut bitboard, move_vector) in pl_moves {
-            // Check 
+            // Check
             let mut lm_vector: Vec<Move> = Vec::new();
 
             move_vector.iter().for_each(|available_move| {
                 let mut testing_board = self.clone(); // EXPENSIVE? TODO: Decide whether or not to keep this
-                let team_moving = testing_board.get_square_team(available_move.start).unwrap_or(Team::None);
+                let team_moving = testing_board
+                    .get_square_team(available_move.start)
+                    .unwrap_or(Team::None);
                 let move_att = testing_board.make_move(*available_move);
-                
-                if move_att.is_ok() {
-                    let enemy_capture_bitboard = (testing_board.capture_bitboard[Team::White as usize] | testing_board.capture_bitboard[Team::Black as usize]);
 
-                    let move_selfchecks = (enemy_capture_bitboard & testing_board.board_pieces[team_moving as usize][PieceType::King as usize]);
-                   
-                    if move_selfchecks.state > 0 { 
-                        bitboard.state.view_bits_mut::<Lsb0>().set(available_move.target, false);
+                if move_att.is_ok() {
+                    if testing_board.is_team_checked(team_moving) {
+                        bitboard
+                            .state
+                            .view_bits_mut::<Lsb0>()
+                            .set(available_move.target, false);
                     } else {
                         lm_vector.push(*available_move);
                     }
@@ -453,21 +472,30 @@ impl BoardState {
             });
 
             legal_moves.push((bitboard, lm_vector))
-        
-        };
+        }
 
         legal_moves
     }
-    pub fn prune_moves_for_team(&self, move_list:Vec<(Bitboard, Vec<Move>)>, team: Team) -> Vec<Move> {
+    pub fn prune_moves_for_team(
+        &mut self,
+        move_list: Vec<(Bitboard, Vec<Move>)>,
+        team: Team,
+    ) -> Vec<Move> {
         let mut pruned_list: Vec<Move> = Vec::new();
         move_list.iter().for_each(|(_, move_vector)| {
             move_vector.iter().for_each(|available_move| {
-                let team_moving = self.get_square_team(available_move.start).unwrap_or(Team::None);
+                let team_moving = self
+                    .get_square_team(available_move.start)
+                    .unwrap_or(Team::None);
                 if (team_moving == team) {
                     pruned_list.push(*available_move);
                 }
             })
         });
+
+        if pruned_list.len() == 0 && self.is_team_checked(self.active_team) {
+            self.active_team_checkmate = true;
+        }
         pruned_list
     }
     pub fn get_square_team(&self, square_idx: usize) -> Option<Team> {
@@ -522,28 +550,46 @@ impl BoardState {
             tracing::debug!("{square_team:?} {moving_piece_type:?} {move:?}");
 
             self.move_piece(square_team, moving_piece_type, r#move);
-            self.en_passant_square = if (r#move.is_pawn_double) {Some(r#move.target)} else {self.en_passant_square};
+            self.en_passant_square = if (r#move.is_pawn_double) {
+                Some(r#move.target)
+            } else {
+                self.en_passant_square
+            };
             self.en_passant_turn = Some(self.turn_clock);
             self.update_capture_bitboards();
 
             if self.active_team == Team::Black {
-                self.active_team = Team::White
+                self.active_team = Team::White;
+                self.turn_clock += 1;
             } else {
                 self.active_team = Team::Black // TODO: Account for three turn order with red before white
             }
         }
-        
+
         return Ok(());
     }
+    // Opponent meaning the inactive team
+    pub fn opponent_attacking_square(&self, pos: usize) -> bool {
+        let enemy_capture_bitboard = (self.capture_bitboard[Team::White as usize]
+            | self.capture_bitboard[Team::Black as usize])
+            & !self.capture_bitboard[self.active_team as usize];
+
+        enemy_capture_bitboard
+            .state
+            .view_bits::<Lsb0>()
+            .get(pos)
+            .unwrap()
+            .then_some(true)
+            .is_some()
+    }
     pub fn get_piece_at_pos(&self, pos: usize) -> Option<Piece> {
-        
         let target_piece_type = self.piece_list[pos];
 
-        let target_piece = if target_piece_type == PieceType::None { 
+        let target_piece = if target_piece_type == PieceType::None {
             Some(Piece {
                 team: self.get_square_team(pos).unwrap_or(Team::None),
                 position: pos,
-                piece_type: target_piece_type
+                piece_type: target_piece_type,
             })
         } else {
             None
