@@ -27,13 +27,9 @@ use crate::bitboard::Bitboard;
 use crate::bitboard::PIECE_TYPE_ARRAY;
 use crate::bitboard::PieceType;
 use crate::bitboard::Team;
-use crate::board;
 use crate::board::BoardState;
 use crate::r#move::Move;
-use crate::opponents;
-use crate::opponents::ChessOpponent;
-use crate::opponents::Matt;
-use crate::opponents::Randy;
+use crate::opponents::*;
 
 pub type ColorRGBA = [f32; 4];
 
@@ -71,7 +67,7 @@ pub struct MainState {
     pub last_move_end: Option<usize>,
     pub player_team: Team,
     pub opp_thread: Option<Receiver<Option<Move>>>,
-    pub opponent: Matt,
+    pub opponent: ChessOpponent
 }
 
 impl MainState {
@@ -79,6 +75,7 @@ impl MainState {
         board_state: BoardState,
         ctx: &mut Context,
         plr_team: Team,
+        opponent: ChessOpponent
     ) -> GameResult<MainState> {
         let mut s = MainState {
             board: board_state,
@@ -92,7 +89,7 @@ impl MainState {
             last_move_origin: None,
             last_move_end: None,
             player_team: plr_team,
-            opponent: Matt { search_budget: 2 },
+            opponent: opponent,
             opp_thread: None,
         };
         s.board_legal_moves = Some(s.board.get_legal_moves());
@@ -331,14 +328,14 @@ impl MainState {
 
 impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        if self.opp_thread.is_none() && self.player_team != self.board.active_team {
+        if self.opp_thread.is_none() && self.player_team != self.board.active_team && !self.board.active_team_checkmate {
             let (mv_tx, mv_rx) = std::sync::mpsc::channel();
-            let mut opponent_clone = self.opponent.clone();
-            let board_clone = self.board.clone();
+            let mut opponent_clone = self.opponent;
+            let board_clone = self.board;
 
             tokio::spawn(async move {
                 
-                let legal = opponent_clone.get_move(board_clone);
+                let legal = (&mut opponent_clone).get_move(board_clone);
                 mv_tx.send(legal).unwrap();
             });
             self.opp_thread = Some(mv_rx);

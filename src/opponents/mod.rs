@@ -1,118 +1,306 @@
 // TODO: Add an opponent module that just seeks a UCI protocol response from a websocket
 // TODO: Add a timer that is passed to the opponent
 
-use std::{cmp::Ordering, collections::HashMap};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use rand::{Rng, rng, seq::IndexedRandom};
 
 use crate::{
     bitboard::{PieceType, Team},
-    board::BoardState,
+    board::{self, BoardState},
     r#move::{self, Move},
 };
+
+const SCORES: [(PieceType, i32); 7] = [
+    (PieceType::None, 0),
+    (PieceType::Pawn, 100),
+    (PieceType::Knight, 300),
+    (PieceType::Bishop, 300),
+    (PieceType::Rook, 500),
+    (PieceType::Queen, 900),
+    (PieceType::King, 1000000),
+];
 
 #[derive(Debug, Copy, Clone)]
 pub struct NegamaxEval {
     eval: i32,
     legal_move: Move,
 }
+#[derive(Debug, Copy, Clone)]
+pub enum ChessOpponent {
+    Randy,
+    Matt(i32),
+    Ada(Duration),
+}
 
-pub trait ChessOpponent {
+fn pick_random_move(mut board: BoardState) -> Option<Move> {
+    let legals = board.prune_moves_for_team(board.get_legal_moves(), board.active_team);
+    legals.choose(&mut rand::rng()).copied()
+}
+
+fn evaluate_move(
+    board: &mut BoardState,
+    ava_move: Move,
+    search_budget: i32,
+    mut best_white: i32,
+    mut best_black: i32,
+) -> i32 {
+    // SUPER EXPENSIVE to recurse over it
+    let mut virtual_board = board;
+    let move_res = virtual_board.make_move(ava_move);
+
+    let mut eval_score = evaluate(virtual_board);
+
+    let risky = virtual_board.opponent_attacking_square(ava_move.target);
+
+    if risky {
+        let score_pt = SCORES.iter().position(|(piece_type, _scre)| {
+            piece_type == &virtual_board.piece_list[ava_move.start]
+        });
+
+        eval_score -= SCORES[score_pt.unwrap()].1;
+    }
+    if search_budget == 0 {
+        return eval_score;
+    }
+    let legals = virtual_board.prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
+
+    if virtual_board.active_team == Team::White {
+        let mut max = i32::MIN;
+
+        for legal_move in legals {
+            let move_score = evaluate_move(
+                virtual_board,
+                legal_move,
+                search_budget - 1,
+                best_white,
+                best_black,
+            );
+            max = max.max(move_score);
+            best_white = best_white.max(move_score);
+
+            if best_white >= best_black {
+                break;
+            }
+        }
+        return max;
+    } else {
+        let mut min = i32::MAX;
+        for legal_move in legals {
+            let move_score = evaluate_move(
+                virtual_board,
+                legal_move,
+                search_budget - 1,
+                best_white,
+                best_black,
+            );
+            min = min.min(move_score);
+            best_black = best_black.min(move_score);
+
+            if best_white <= best_black {
+                break;
+            }
+        }
+        return min;
+    }
+}
+fn evaluate_team(board: &BoardState, team: Team) -> i32 {
+    let mut material = 0;
+    for (idx, piece) in board.piece_list.iter().enumerate() {
+        if board.get_square_team(idx).unwrap_or(Team::None) == team {
+            let score_pt = SCORES
+                .iter()
+                .position(|(piece_type, _scre)| piece_type == piece);
+
+            material += SCORES[score_pt.unwrap()].1;
+        }
+    }
+
+    /* material += board
+    .prune_moves_for_team(board.get_legal_moves(), board.active_team)
+    .len() as i32
+    * 25;*/
+
+    material
+        + (if board.active_team_checkmate && board.active_team != team {
+            100000000
+        } else {
+            0
+        })
+}
+fn evaluate(board: &BoardState) -> i32 {
+    let white_eval = evaluate_team(board, Team::White);
+    let black_eval = evaluate_team(board, Team::Black);
+
+    let mut jiggle = rng().random_range(-80..80);
+
+    if board.turn_clock <= 3 {
+        jiggle = rng().random_range(-20..20);
+    }
+    return (white_eval - black_eval) + jiggle;
+}
+
+pub trait MoveComputer {
     fn get_move(&mut self, board: BoardState) -> Option<Move>;
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct Randy {}
-impl ChessOpponent for Randy {
+impl MoveComputer for ChessOpponent {
     fn get_move(&mut self, board: BoardState) -> Option<Move> {
-        let legals = board.prune_moves_for_team(board.get_legal_moves(), board.active_team);
-        legals.choose(&mut rand::rng()).copied()
-    }
-}
+        let mut board = board.clone();
+        let result = match self {
+            ChessOpponent::Randy => pick_random_move(board),
+            ChessOpponent::Ada(time_limit) => {
+                let mut legals = board.prune_moves_for_team(board.get_legal_moves(), board.active_team);
+                let mut current_best: Option<NegamaxEval> = None;
+                let start_time = Instant::now();
 
-#[derive(Debug, Copy, Clone)]
-pub struct Matt {
-    pub search_budget: i32,
-}
-impl ChessOpponent for Matt {
-    fn get_move(&mut self, board: BoardState) -> Option<Move> {
-        let mut legals = board.prune_moves_for_team(board.get_legal_moves(), board.active_team);
-        let mut mapped_legals = Vec::new();
-        // expensive...
-        for legal_move in legals {
-            let eval = Matt::evaluate_move(&board, legal_move, self.search_budget - 1)
-                * if board.active_team == Team::White {
-                    1
+                if legals.len() == 1 {
+                    return Some(legals[0]);
+                }
+                let mut search_budget = 1;
+                loop {
+                    let mut mapped_legals = Vec::new();
+                    let mut will_break = false;
+                    // Check the current best first
+
+                    legals.sort_by(|c_a, c_b| {
+                        if let Some(cb) = current_best {
+                            if cb.legal_move == *c_a && cb.legal_move != *c_b {
+                                Ordering::Less
+                            } else {
+                                Ordering::Equal
+                            }
+                        } else {
+                            Ordering::Equal
+                        }
+                    });
+                    'legal_check: for legal_move in &legals {
+                        if Instant::now().duration_since(start_time) > *time_limit {
+                            will_break = true;
+                            break 'legal_check;
+                        };
+
+                        // Preset the AB pruning with the eval we already have
+                        let (mut best_white, mut best_black) = (i32::MIN, i32::MAX);
+
+                        if let Some(cb) = current_best {
+                            if board.active_team == Team::White {
+                                best_white = cb.eval;
+                            } else if board.active_team == Team::Black {
+                                best_black = -cb.eval;
+                            }
+                        }
+                        let eval = evaluate_move(
+                            &mut board.clone(),
+                            *legal_move,
+                            search_budget - 1,
+                            best_white,
+                            best_black,
+                        ) * if board.active_team == Team::White {
+                            1
+                        } else {
+                            -1
+                        };
+
+                        mapped_legals.push(NegamaxEval {
+                            eval: eval,
+                            legal_move: *legal_move,
+                        })
+                    }
+
+                    mapped_legals.sort_by(|a, b| b.eval.cmp(&a.eval));
+                    if mapped_legals.len() > 0 {
+                        if let Some(current_best_move) = current_best {
+                            current_best = if current_best_move.eval < mapped_legals[0].eval {
+                                Some(mapped_legals[0])
+                            } else {
+                                current_best
+                            };
+                        } else {
+                            current_best = Some(mapped_legals[0]);
+                        }
+
+                        println!(
+                            "\n Best move ply {search_budget}: {:?}",
+                            mapped_legals[0].eval
+                        );
+                        println!("Mapped legals ply {search_budget}: {:?}", mapped_legals);
+                    } else {
+                        if let Some(current_best_move) = current_best {
+                            mapped_legals.push(current_best_move);
+                        }
+                    }
+                    if will_break {
+                        break;
+                    };
+                    search_budget += 1;
+                }
+
+                if current_best.is_some() {
+                    println!(
+                        "Within limit of {:?} Ada got to ply {search_budget} eval: {}",
+                        time_limit,
+                        current_best.unwrap().eval
+                    );
+                    Some(current_best.unwrap().legal_move)
                 } else {
-                    -1
-                };
+                    None
+                }
+            }
+            ChessOpponent::Matt(search_budget) => {
+                let legals = board.prune_moves_for_team(board.get_legal_moves(), board.active_team);
+                let mut mapped_legals = Vec::new();
+                if legals.len() == 1 {
+                    return Some(legals[0]);
+                }
+                // expensive...
+                for legal_move in legals {
+                    let eval = evaluate_move(
+                        &mut board.clone(),
+                        legal_move,
+                        *search_budget - 1,
+                        i32::MIN,
+                        i32::MAX,
+                    ) * if board.active_team == Team::White {
+                        1
+                    } else {
+                        -1
+                    };
 
-            mapped_legals.push(NegamaxEval {
-                eval: eval,
-                legal_move: legal_move,
-            })
-        }
+                    mapped_legals.push(NegamaxEval {
+                        eval: eval,
+                        legal_move: legal_move,
+                    })
+                }
 
-        mapped_legals.sort_by(|a, b| a.eval.cmp(&b.eval));
-        println!("Evaled to: {}", mapped_legals[0].eval);
-        if mapped_legals.len() > 1 {
-            Some(mapped_legals[mapped_legals.len() - 1].legal_move)
+                mapped_legals.sort_by(|a, b| b.eval.cmp(&a.eval));
+                println!(
+                    "Evaled to: {} and {}",
+                    mapped_legals[0].eval,
+                    mapped_legals[mapped_legals.len() - 1].eval
+                );
+
+                if mapped_legals.len() > 0 {
+                    Some(mapped_legals[0].legal_move)
+                } else {
+                    None
+                }
+            }
+        };
+
+        if result.is_some() {
+            result
         } else {
+            if board.is_team_checked(board.active_team) {
+                println!("Checkmate - {:?} loses", board.active_team);
+            } else {
+                println!("Stalemate");
+            }
             None
         }
-    }
-}
-impl Matt {
-    fn evaluate_move(board: &BoardState, ava_move: Move, search_budget: i32) -> i32 {
-        // SUPER EXPENSIVE to recurse over it
-        let mut virtual_board = board.clone();
-        let move_res = virtual_board.make_move(ava_move);
-
-        let mut eval_score = Matt::evaluate(virtual_board);
-
-        if search_budget == 0 {
-        } else {
-            let legals = board.prune_moves_for_team(
-                (&virtual_board).get_legal_moves(),
-                (&virtual_board).active_team,
-            );
-
-            legals.iter().for_each(|legal_move| {
-                eval_score += Matt::evaluate_move(&virtual_board, *legal_move, search_budget - 1)
-            });
-        }
-        eval_score
-    }
-    fn evaluate_team(board: &BoardState, team: Team) -> i32 {
-        let scores: HashMap<PieceType, i32> = HashMap::from([
-            (PieceType::None, 0),
-            (PieceType::Pawn, 100),
-            (PieceType::Knight, 300),
-            (PieceType::Bishop, 300),
-            (PieceType::Rook, 500),
-            (PieceType::Queen, 900),
-            (PieceType::King, 1000000),
-        ]);
-
-        let mut material = 0;
-        for (idx, piece) in board.piece_list.iter().enumerate() {
-            if board.get_square_team(idx).unwrap_or(Team::None) == team {
-                material += scores.get(piece).unwrap_or(&0);
-            }
-        }
-
-        material += board
-            .prune_moves_for_team(board.get_legal_moves(), board.active_team)
-            .len() as i32
-            * 25; 
-        material
-    }
-    fn evaluate(board: BoardState) -> i32 {
-        let white_eval = Matt::evaluate_team(&board, Team::White);
-        let black_eval = Matt::evaluate_team(&board, Team::Black);
-
-        let jiggle = rng().random_range(-100..100);
-
-        return (white_eval - black_eval) + jiggle;
     }
 }
