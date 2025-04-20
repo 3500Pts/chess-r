@@ -359,7 +359,6 @@ impl BoardState {
             self.capture_bitboard[team_id] = capture_bitboard;
         }
     }
-    }
     pub fn render_piece_list(pl: Vec<PieceType>) {
         print!("  a b c d e f g h");
 
