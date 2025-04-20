@@ -13,8 +13,8 @@ const LIST_OF_PIECES: &str = "kqrbnpKQRBNP";
 const SPLITTER: char = '/';
 
 // Returns a table of the distance to the edges of the board for every square where index 0 of a square's table is the distance to the top, 1 is bottom, 2 is right, 3 is left, 4 is topright, 5 is bottomright, 6 is bottomleft, 7 is topleft.
-pub fn compute_edges() -> Vec<Vec<usize>> {
-    let mut square_list: Vec<Vec<usize>> = vec![vec![0; 8]; 64];
+pub fn compute_edges() -> [[usize; 8]; 64] {
+    let mut square_list= [[0; 8]; 64];
 
     for square_pos in 0..square_list.len() {
         let rank = square_pos.div_floor(8);
@@ -25,7 +25,7 @@ pub fn compute_edges() -> Vec<Vec<usize>> {
         let left_dist = file;
         let right_dist = 7 - file;
 
-        square_list[square_pos] = vec![
+        square_list[square_pos] = [
             top_dist,
             bottom_dist,
             right_dist,
@@ -65,35 +65,33 @@ impl fmt::Display for FENErr {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct BoardState {
-    pub board_pieces: Vec<Vec<Bitboard>>,
-    pub to_move: Team,
+    pub board_pieces: [[Bitboard; 7]; 3],
     pub castling_rights: u8, // Using queen, king, and each side as booleans, there are 4 bits of castling rights that can be expressed as a number
     pub fifty_move_clock: i64,
     pub en_passant_square: Option<usize>,
     pub turn_clock: i64,
     pub ply_clock: i64,
-    pub piece_list: Vec<PieceType>,
-    pub edge_compute: Vec<Vec<usize>>,
-    pub capture_bitboard: Vec<Bitboard>,
+    pub piece_list: [PieceType; 64],
+    pub edge_compute: [[usize; 8]; 64],
+    pub capture_bitboard: [Bitboard; 2],
     pub en_passant_turn: Option<i64>,
     pub active_team: Team,
 }
 impl Default for BoardState {
     fn default() -> Self {
         BoardState {
-            board_pieces: vec![vec![Bitboard { state: 0 }; 7]; 3],
-            to_move: Team::White,
+            board_pieces: [[Bitboard { state: 0 }; 7]; 3],
             castling_rights: 0,
             fifty_move_clock: 0,
             ply_clock: 0,
             turn_clock: 1,
             en_passant_square: None,
             en_passant_turn: None,
-            piece_list: vec![PieceType::None; 64], // TODO: Make this compatible with any amount of squares/any size of map. Maybe as a type argument to the board state?
+            piece_list: [PieceType::None; 64], // TODO: Make this compatible with any amount of squares/any size of map. Maybe as a type argument to the board state?
             edge_compute: compute_edges(),
-            capture_bitboard: vec![Bitboard { state: 0 }; 2],
+            capture_bitboard: [Bitboard { state: 0 }; 2],
             active_team: Team::White
         }
     }
@@ -220,9 +218,9 @@ impl BoardState {
                 }
                 2 => {
                     if fen_part.contains("b") {
-                        result_obj.to_move = Team::Black
+                        result_obj.active_team = Team::Black
                     } else if fen_part.contains("w") {
-                        result_obj.to_move = Team::White
+                        result_obj.active_team = Team::White
                     } else {
                         return Err(FENErr::BadTeam);
                     }

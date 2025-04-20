@@ -1,4 +1,9 @@
 use std::collections::HashMap;
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::thread::JoinHandle;
+use std::time::Duration;
+use std::time::Instant;
 
 use bitvec::order::Lsb0;
 use bitvec::view::BitView;
@@ -26,8 +31,9 @@ use crate::board;
 use crate::board::BoardState;
 use crate::r#move::Move;
 use crate::opponents;
-use crate::opponents::Randy;
 use crate::opponents::ChessOpponent;
+use crate::opponents::Matt;
+use crate::opponents::Randy;
 
 pub type ColorRGBA = [f32; 4];
 
@@ -53,18 +59,19 @@ pub fn color_lerp(left: Color, right: Color, t: f32) -> Color {
     ]);
 }
 pub struct MainState {
-    board: BoardState,
-    piece_imgs: HashMap<String, Image>,
-    sound_sources: HashMap<String, Source>,
-    selected_square: Option<usize>,
-    queued_move: Option<Move>, // Moves are queued to the draw queue so nothing changes during drawing
-    drag_x: Option<f32>,
-    drag_y: Option<f32>,
-    board_legal_moves: Option<Vec<(Bitboard, Vec<Move>)>>,
-    last_move_origin: Option<usize>,
-    last_move_end: Option<usize>,
-    player_team: Team,
-    opponent: Randy
+    pub board: BoardState,
+    pub piece_imgs: HashMap<String, Image>,
+    pub sound_sources: HashMap<String, Source>,
+    pub selected_square: Option<usize>,
+    pub queued_move: Option<Move>, // Moves are queued to the draw queue so nothing changes during drawing
+    pub drag_x: Option<f32>,
+    pub drag_y: Option<f32>,
+    pub board_legal_moves: Option<Vec<(Bitboard, Vec<Move>)>>,
+    pub last_move_origin: Option<usize>,
+    pub last_move_end: Option<usize>,
+    pub player_team: Team,
+    pub opp_thread: Option<Receiver<Option<Move>>>,
+    pub opponent: Matt,
 }
 
 impl MainState {
@@ -85,7 +92,8 @@ impl MainState {
             last_move_origin: None,
             last_move_end: None,
             player_team: plr_team,
-            opponent: Randy {}
+            opponent: Matt { search_budget: 2 },
+            opp_thread: None,
         };
         s.board_legal_moves = Some(s.board.get_legal_moves());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
@@ -117,7 +125,7 @@ impl MainState {
             if let Ok(image) = image_res {
                 s.piece_imgs.insert(id.to_owned(), image);
             } else {
-                println!("{image_res:?}");
+                //println!("{image_res:?}");
             }
         });
 
@@ -159,8 +167,13 @@ impl MainState {
                             .view_bits::<Lsb0>()
                             .get(square_number);
 
-                        let board_team = self.board.get_square_team(selected_square).unwrap_or(Team::None);
-                        if status_on_bitboard.unwrap().then_some(true).is_some() && self.player_team == board_team {
+                        let board_team = self
+                            .board
+                            .get_square_team(selected_square)
+                            .unwrap_or(Team::None);
+                        if status_on_bitboard.unwrap().then_some(true).is_some()
+                            && self.player_team == board_team
+                        {
                             color_lerp(
                                 Color::from(SELECTED_SQUARE_COLOR),
                                 default_color,
@@ -315,8 +328,40 @@ impl MainState {
         Ok(())
     }
 }
+
 impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        if self.opp_thread.is_none() && self.player_team != self.board.active_team {
+            let (mv_tx, mv_rx) = std::sync::mpsc::channel();
+            let mut opponent_clone = self.opponent.clone();
+            let board_clone = self.board.clone();
+
+            tokio::spawn(async move {
+                
+                let legal = opponent_clone.get_move(board_clone);
+                mv_tx.send(legal).unwrap();
+            });
+            self.opp_thread = Some(mv_rx);
+        }
+        self.queued_move = if self.player_team != self.board.active_team {
+            if let Some(ot) = &self.opp_thread {
+                let legal = ot.try_recv();
+
+                if let Ok(legal_move) = legal {
+                    if legal_move.is_none() {
+                        println!("Mate");
+                    }
+                    legal_move 
+                } else {
+                    self.queued_move
+                }
+            } else {
+                self.queued_move
+            }
+        } else {
+            self.queued_move
+        };
+        
         Ok(())
     }
     fn mouse_button_down_event(
@@ -364,8 +409,15 @@ impl event::EventHandler<ggez::GameError> for MainState {
             // Attempt a move here if it's on the bitboard
 
             if let Some(selected_square) = self.selected_square {
+                let ss_team = self
+                    .board
+                    .get_square_team(selected_square)
+                    .unwrap_or(Team::None);
+
                 if let Some(pl_moves) = &self.board_legal_moves {
-                    self.queued_move = if self.player_team == self.board.active_team {
+                    self.queued_move = if self.player_team == self.board.active_team
+                        && ss_team == self.player_team
+                    {
                         pl_moves[selected_square]
                             .1
                             .iter()
@@ -405,24 +457,15 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 self.board.get_team_coverage(Team::Black)
             );
             // Pull the move from queue
+            if self.player_team == self.board.active_team {
+                self.opp_thread = None;
+            }
             self.queued_move = None;
         }
         self.draw_board(ctx, &mut canvas)?;
         self.draw_pieces(ctx, &mut canvas)?;
 
-        // Queue a move for the opponent if necessary
-        self.queued_move = if self.player_team != self.board.active_team {
-            let legal = self.opponent.get_move(self.board.clone());
-            if legal.is_some() {
-                legal
-            } else {
-                // Check/stalemate
-                println!("Stalemate/checkmate: {:?} wins", self.player_team);
-                self.queued_move
-            }
-        } else {
-            self.queued_move
-        };
+        //};
         canvas.finish(ctx)?;
         Ok(())
     }
