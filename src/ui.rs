@@ -67,7 +67,7 @@ pub struct MainState {
     pub last_move_end: Option<usize>,
     pub player_team: Team,
     pub opp_thread: Option<Receiver<Option<Move>>>,
-    pub opponent: ChessOpponent
+    pub opponent: ChessOpponent,
 }
 
 impl MainState {
@@ -75,7 +75,7 @@ impl MainState {
         board_state: BoardState,
         ctx: &mut Context,
         plr_team: Team,
-        opponent: ChessOpponent
+        opponent: ChessOpponent,
     ) -> GameResult<MainState> {
         let mut s = MainState {
             board: board_state,
@@ -328,13 +328,15 @@ impl MainState {
 
 impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        if self.opp_thread.is_none() && self.player_team != self.board.active_team && !self.board.active_team_checkmate {
+        if self.opp_thread.is_none()
+            && self.player_team != self.board.active_team
+            && !self.board.active_team_checkmate
+        {
             let (mv_tx, mv_rx) = std::sync::mpsc::channel();
             let mut opponent_clone = self.opponent;
             let board_clone = self.board;
 
             tokio::spawn(async move {
-                
                 let legal = (&mut opponent_clone).get_move(board_clone);
                 mv_tx.send(legal).unwrap();
             });
@@ -346,9 +348,13 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
                 if let Ok(legal_move) = legal {
                     if legal_move.is_none() {
-                        println!("Mate");
+                        if self.board.is_team_checked(self.board.active_team) {
+                            println!("Checkmate");
+                        } else {
+                            println!("Stalemate");
+                        }
                     }
-                    legal_move 
+                    legal_move
                 } else {
                     self.queued_move
                 }
@@ -358,7 +364,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
         } else {
             self.queued_move
         };
-        
+
         Ok(())
     }
     fn mouse_button_down_event(

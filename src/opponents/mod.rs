@@ -158,6 +158,9 @@ impl MoveComputer for ChessOpponent {
                 let mut current_best: Option<NegamaxEval> = None;
                 let start_time = Instant::now();
 
+                if board.active_team_checkmate {
+                    return None 
+                }
                 if legals.len() == 1 {
                     return Some(legals[0]);
                 }
