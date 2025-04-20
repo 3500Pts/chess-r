@@ -88,6 +88,8 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
         _ => {
             panic!("Pawn movements for unconventional teams are unhandled"); // TODO: Dont forget to fix this if you add other teams
         }
+
+        
     };
 
     let pawn_view_range = forward_direction.signum();
@@ -116,6 +118,10 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
             if !(0..board.piece_list.len()).contains(&possible_target) {
                 continue;
             };
+            let target_file = possible_target % 8;
+            let start_file = piece.position % 8;
+
+            if (target_file.abs_diff(start_file) > 3) {continue};
 
             let target_piece_type = board.piece_list[possible_target];
 
@@ -127,8 +133,6 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
                 captures: target_piece,
             };
             if target_piece_type == PieceType::None {
-                // Nothing is there, do not process based on team
-                // Register a capture
                 psuedolegalize_move(
                     &mut computed_moves,
                     &mut bitboard,
@@ -140,7 +144,7 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
                     &mut computed_moves,
                     &mut bitboard,
                     resulting_move,
-                    is_square_attackable(board, piece, possible_target) && offset_index != 1,
+                    is_square_attackable(board, piece, possible_target) && (offset_index != 1 && step == 1),
                 );
                 // Can't jump over it
                 break 'step_ray;
@@ -166,7 +170,7 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
                 &mut computed_moves,
                 &mut bitboard,
                 resulting_move,
-                is_square_attackable(board, piece, en_pass) && board.en_passant_turn.unwrap() == board.turn_clock,
+                is_square_attackable(board, piece, en_pass) && board.en_passant_turn.unwrap() == board.turn_clock && target_piece_type == PieceType::Pawn,
             );
         }
     }
@@ -276,22 +280,17 @@ pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
             is_pawn_double: false,
             captures: target_piece,
         };
+
+        let target_file = possible_target % 8;
+        let start_file = piece.position % 8;
+        
+        // Disable stuff that lets you loop around the board, which seems to only happen laterally.
+        // Do this by ignoring anything that is on file A/B if you're on H/G and vice versa
         psuedolegalize_move(
             &mut computed_moves,
             &mut bitboard,
             resulting_move,
-            is_square_attackable(board, piece, possible_target),
-        );
-
-        // Disable stuff that lets you loop around the board, which seems to only happen laterally.
-        // Do this by ignoring anything that is on file A/B if you're on H/G and vice versa
-        let target_file = possible_target % 8;
-        let start_file = piece.position % 8;
-
-        bitboard.state.view_bits_mut::<Lsb0>().set(
-            possible_target,
-            is_square_attackable(board, piece, possible_target)
-                && target_file.abs_diff(start_file) < 5,
+            is_square_attackable(board, piece, possible_target) && target_file.abs_diff(start_file) <= 2,
         );
     }
 
