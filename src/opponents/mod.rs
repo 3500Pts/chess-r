@@ -64,6 +64,11 @@ fn evaluate_move(
 
         eval_score -= SCORES[score_pt.unwrap()].1;
     }
+
+    if ava_move.is_castle {
+        eval_score += 580
+    }
+
     if search_budget == 0 {
         return eval_score;
     }
@@ -136,12 +141,7 @@ fn evaluate(board: &BoardState) -> i32 {
     let white_eval = evaluate_team(board, Team::White);
     let black_eval = evaluate_team(board, Team::Black);
 
-    let mut jiggle = rng().random_range(-80..80);
-
-    if board.turn_clock <= 3 {
-        jiggle = rng().random_range(-20..20);
-    }
-    return (white_eval - black_eval) + jiggle;
+    return (white_eval - black_eval);
 }
 
 pub trait MoveComputer {
@@ -298,11 +298,6 @@ impl MoveComputer for ChessOpponent {
         if result.is_some() {
             result
         } else {
-            if board.is_team_checked(board.active_team) {
-                println!("Checkmate - {:?} loses", board.active_team);
-            } else {
-                println!("Stalemate");
-            }
             None
         }
     }

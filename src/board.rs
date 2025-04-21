@@ -6,7 +6,8 @@ use crate::{
 };
 use std::{
     collections::HashMap,
-    fmt::{self}, io::Read,
+    fmt::{self},
+    io::Read,
 };
 
 const LIST_OF_PIECES: &str = "kqrbnpKQRBNP";
@@ -99,7 +100,7 @@ impl Default for BoardState {
     }
 }
 impl BoardState {
-    /* 
+    /*
         Constructs a board state from a FEN string
     */
     pub fn from_fen(fen: String) -> Result<Self, FENErr> {
@@ -231,21 +232,22 @@ impl BoardState {
                 }
                 3 => {
                     let mut rights: u8 = 0;
-                    if fen_part.contains("K") {
+                    if fen_part.contains('K') {
                         rights.view_bits_mut::<Lsb0>().set(0, true);
                     }
-                    if fen_part.contains("Q") {
+                    if fen_part.contains('Q') {
                         rights.view_bits_mut::<Lsb0>().set(1, true);
                     }
-                    if fen_part.contains("k") {
+                    if fen_part.contains('k') {
                         rights.view_bits_mut::<Lsb0>().set(2, true);
                     }
-                    if fen_part.contains("q") {
+                    if fen_part.contains('q') {
                         rights.view_bits_mut::<Lsb0>().set(3, true);
                     }
 
-                    if fen_part.contains("-") && rights > 0 { // TODO: Throw an error if we hit the 'else' arm and rights is not 0
+                    if fen_part.contains('-') && rights > 0 { // TODO: Throw an error if we hit the 'else' arm and rights is not 0
                     }
+                    result_obj.castling_rights = rights;
                 }
                 4 => {
                     if fen_part.len() < 2 {
@@ -345,6 +347,29 @@ impl BoardState {
                 });
         }
 
+        // Update castling rights
+        if r#move.start == 56 || r#move.target == 56 {
+            // Black queenside rook
+            self.castling_rights.view_bits_mut::<Lsb0>().set(3, false);
+        } else if r#move.start == 0 || r#move.target == 0 {
+            // White queenside rook
+            self.castling_rights.view_bits_mut::<Lsb0>().set(1, false);
+        } else if r#move.start == 7 || r#move.target == 7 {
+            // White kingside rook
+            self.castling_rights.view_bits_mut::<Lsb0>().set(0, false);
+        } else if r#move.start == 63 || r#move.target == 63 {
+            // Black kingside rook
+            self.castling_rights.view_bits_mut::<Lsb0>().set(2, false);
+        } else if r#move.start == 4 || r#move.target == 4 {
+            // Black king
+            self.castling_rights.view_bits_mut::<Lsb0>().set(2, false);
+            self.castling_rights.view_bits_mut::<Lsb0>().set(3, false);
+        } else if r#move.start == 60 || r#move.target == 60 {
+            // White king
+            self.castling_rights.view_bits_mut::<Lsb0>().set(0, false);
+            self.castling_rights.view_bits_mut::<Lsb0>().set(1, false);
+        }
+
         self.piece_list[r#move.start] = PieceType::None;
         self.piece_list[r#move.target] = moving_piece_type;
     }
@@ -394,6 +419,7 @@ impl BoardState {
     pub fn get_psuedolegal_moves(&self) -> Vec<(Bitboard, Vec<Move>)> {
         let pl = self.piece_list.clone();
         let mut move_list: Vec<(Bitboard, Vec<Move>)> = Vec::new(); // The bitboard is used for highlighting moves the selected square has
+
         pl.iter().enumerate().for_each(|(index, piece_type)| {
             let default_push = (Bitboard::default(), vec![Move::default()]);
 
@@ -422,15 +448,49 @@ impl BoardState {
         // Add castling
         // K, Q, k q
         for castling_move in 0..4 {
-            if self
-                .castling_rights
-                .view_bits::<Lsb0>()
+            let castling_rights_bits = self.castling_rights.view_bits::<Lsb0>();
+
+            if castling_rights_bits
                 .get(castling_move)
                 .unwrap()
                 .then_some(1)
                 .is_some()
-            {}
+            {
+                // Update bitboard for this square
+                let king_square = if castling_move < 2 { 4 } else { 60 };
+                if self.piece_list[king_square] != PieceType::King {
+                    continue;
+                };
+                let (bitboard, move_vec) = &mut move_list[king_square];
+
+                if (castling_move == 0 || castling_move == 2) && pl[king_square + 2] == PieceType::None && pl[king_square + 1] == PieceType::None {
+                    bitboard
+                        .state
+                        .view_bits_mut::<Lsb0>()
+                        .set(king_square + 2, true);
+                    move_vec.push(Move {
+                        start: king_square,
+                        target: king_square + 2,
+                        captures: None,
+                        is_pawn_double: false,
+                        is_castle: true,
+                    });
+                } else if pl[king_square - 2] == PieceType::None && pl[king_square - 1] == PieceType::None{
+                    bitboard
+                        .state
+                        .view_bits_mut::<Lsb0>()
+                        .set(king_square - 2, true);
+                    move_vec.push(Move {
+                        start: king_square,
+                        target: king_square - 2,
+                        captures: None,
+                        is_pawn_double: false,
+                        is_castle: true,
+                    });
+                }
+            }
         }
+
         move_list
     }
     pub fn is_team_checked(&self, team: Team) -> bool {
@@ -530,7 +590,6 @@ impl BoardState {
         square_team
     }
     pub fn make_move(&mut self, r#move: Move) -> Result<(), MoveError> {
-        
         // Update out of the target positions
         let moving_piece_type = self.piece_list[r#move.start];
         let square_team_opt = self.get_square_team(r#move.start);
@@ -549,12 +608,66 @@ impl BoardState {
             tracing::debug!("{square_team:?} {moving_piece_type:?} {move:?}");
 
             self.move_piece(square_team, moving_piece_type, r#move);
-            self.en_passant_square = if (r#move.is_pawn_double) {
+
+            // Move the rook for castlings
+            // White
+
+            if r#move.is_castle && r#move.target == 6 {
+                // Rook to a5
+                self.move_piece(square_team, PieceType::Rook, {
+                    Move {
+                        start: 7,
+                        target: 5,
+                        captures: None,
+                        is_pawn_double: false,
+                        is_castle: true,
+                    }
+                });
+            } else if r#move.is_castle && r#move.target == 2 {
+                // Rook to a3
+                self.move_piece(square_team, PieceType::Rook, {
+                    Move {
+                        start: 0,
+                        target: 3,
+                        captures: None,
+                        is_pawn_double: false,
+                        is_castle: true,
+                    }
+                });
+            } else if r#move.is_castle && r#move.target == 58 {
+                // Rook to a3
+                self.move_piece(square_team, PieceType::Rook, {
+                    Move {
+                        start: 56,
+                        target: 59,
+                        captures: None,
+                        is_pawn_double: false,
+                        is_castle: true,
+                    }
+                });
+            } else if r#move.is_castle && r#move.target == 62 {
+                // Rook to a3
+                self.move_piece(square_team, PieceType::Rook, {
+                    Move {
+                        start: 63,
+                        target: 61,
+                        captures: None,
+                        is_pawn_double: false,
+                        is_castle: true,
+                    }
+                });
+            }
+
+            self.en_passant_square = if r#move.is_pawn_double {
                 Some(r#move.target)
             } else {
                 self.en_passant_square
             };
             self.en_passant_turn = Some(self.turn_clock);
+
+            
+            // Crudely handle promotions by queening any pawns that finished
+
             self.update_capture_bitboards();
 
             if self.active_team == Team::Black {
@@ -567,7 +680,6 @@ impl BoardState {
 
         return Ok(());
     }
-    // Opponent meaning the inactive team
     pub fn opponent_attacking_square(&self, pos: usize) -> bool {
         let enemy_capture_bitboard = (self.capture_bitboard[Team::White as usize]
             | self.capture_bitboard[Team::Black as usize])

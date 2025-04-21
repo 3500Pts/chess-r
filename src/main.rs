@@ -11,6 +11,8 @@ pub mod ui;
 
 const START_POS_CHESS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+const CASTLING_TEST: &str = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1";
+
 use std::time::Duration;
 
 use bitboard::Team;

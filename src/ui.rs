@@ -348,8 +348,10 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
                 if let Ok(legal_move) = legal {
                     if legal_move.is_none() {
+                        let opponent = if self.board.active_team == Team::White { Team::Black } else { Team::White };
+
                         if self.board.is_team_checked(self.board.active_team) {
-                            println!("Checkmate");
+                            println!("Checkmate - {opponent:?} wins");
                         } else {
                             println!("Stalemate");
                         }

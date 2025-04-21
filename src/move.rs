@@ -18,6 +18,7 @@ pub struct Move {
     pub target: usize,
     pub captures: Option<Piece>,
     pub is_pawn_double: bool, // en passant tracker
+    pub is_castle: bool
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -131,6 +132,7 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
                 target: possible_target,
                 is_pawn_double: step == 2,
                 captures: target_piece,
+                is_castle: false
             };
             if target_piece_type == PieceType::None {
                 psuedolegalize_move(
@@ -164,6 +166,7 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
                 target: en_pass,
                 is_pawn_double: false,
                 captures: target_piece,
+                is_castle: false
             };
              
             psuedolegalize_move(
@@ -243,6 +246,7 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
                 target: possible_target,
                 is_pawn_double: false,
                 captures: target_piece,
+                is_castle: false
             };
             psuedolegalize_move(
                 &mut computed_moves,
@@ -279,6 +283,7 @@ pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
             target: possible_target,
             is_pawn_double: false,
             captures: target_piece,
+            is_castle: false
         };
 
         let target_file = possible_target % 8;
