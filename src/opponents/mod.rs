@@ -50,36 +50,43 @@ fn evaluate_move(
     mut best_black: i32,
 ) -> i32 {
     // SUPER EXPENSIVE to recurse over it
-    let mut virtual_board = board;
-    let move_res = virtual_board.make_move(ava_move);
-
-    let mut eval_score = evaluate(virtual_board);
+    let virtual_board = &mut board.clone();
+    let who_to_play = if virtual_board.active_team == Team::White {
+        1
+    } else {
+        -1
+    };
 
     let risky = virtual_board.opponent_attacking_square(ava_move.target);
 
+    let mut eval_score = 0;
     if risky {
         let score_pt = SCORES.iter().position(|(piece_type, _scre)| {
             piece_type == &virtual_board.piece_list[ava_move.start]
         });
 
-        eval_score -= SCORES[score_pt.unwrap()].1;
+        eval_score -= SCORES[score_pt.unwrap()].1 * who_to_play;
     }
 
+    let _ = virtual_board.make_move(ava_move);
+    eval_score += evaluate(virtual_board);
+
     if ava_move.is_castle {
-        eval_score += 580
+        eval_score += 580 * who_to_play
     }
 
     if search_budget == 0 {
         return eval_score;
     }
-    let legals = virtual_board.prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
+    let legals = virtual_board
+        .prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
 
     if virtual_board.active_team == Team::White {
         let mut max = i32::MIN;
 
         for legal_move in legals {
             let move_score = evaluate_move(
-                virtual_board,
+                &mut virtual_board.clone(),
                 legal_move,
                 search_budget - 1,
                 best_white,
@@ -97,7 +104,7 @@ fn evaluate_move(
         let mut min = i32::MAX;
         for legal_move in legals {
             let move_score = evaluate_move(
-                virtual_board,
+                &mut virtual_board.clone(),
                 legal_move,
                 search_budget - 1,
                 best_white,
@@ -125,11 +132,6 @@ fn evaluate_team(board: &BoardState, team: Team) -> i32 {
         }
     }
 
-    /* material += board
-    .prune_moves_for_team(board.get_legal_moves(), board.active_team)
-    .len() as i32
-    * 25;*/
-
     material
         + (if board.active_team_checkmate && board.active_team != team {
             100000000
@@ -141,7 +143,7 @@ fn evaluate(board: &BoardState) -> i32 {
     let white_eval = evaluate_team(board, Team::White);
     let black_eval = evaluate_team(board, Team::Black);
 
-    return (white_eval - black_eval);
+    return white_eval - black_eval;
 }
 
 pub trait MoveComputer {
@@ -154,12 +156,14 @@ impl MoveComputer for ChessOpponent {
         let result = match self {
             ChessOpponent::Randy => pick_random_move(board),
             ChessOpponent::Ada(time_limit) => {
-                let mut legals = board.prune_moves_for_team(board.get_legal_moves(), board.active_team);
+                let mut legals =
+                    board.prune_moves_for_team(board.get_legal_moves(), board.active_team);
                 let mut current_best: Option<NegamaxEval> = None;
+                let mut current_worst: Option<NegamaxEval> = None;
                 let start_time = Instant::now();
 
                 if board.active_team_checkmate {
-                    return None 
+                    return None;
                 }
                 if legals.len() == 1 {
                     return Some(legals[0]);
@@ -197,6 +201,14 @@ impl MoveComputer for ChessOpponent {
                                 best_black = -cb.eval;
                             }
                         }
+
+                        if let Some(cb) = current_worst {
+                            if board.active_team == Team::White {
+                                best_white = -cb.eval;
+                            } else if board.active_team == Team::Black {
+                                best_black = cb.eval;
+                            }
+                        }
                         let eval = evaluate_move(
                             &mut board.clone(),
                             *legal_move,
@@ -225,6 +237,17 @@ impl MoveComputer for ChessOpponent {
                             };
                         } else {
                             current_best = Some(mapped_legals[0]);
+                        }
+
+                        if let Some(current_worst_move) = current_worst {
+                            current_worst =
+                                if current_worst_move.eval > mapped_legals.last().unwrap().eval {
+                                    mapped_legals.last().copied()
+                                } else {
+                                    current_best
+                                };
+                        } else {
+                            current_worst = mapped_legals.last().copied();
                         }
 
                         println!(
@@ -295,10 +318,6 @@ impl MoveComputer for ChessOpponent {
             }
         };
 
-        if result.is_some() {
-            result
-        } else {
-            None
-        }
+        if result.is_some() { result } else { None }
     }
 }

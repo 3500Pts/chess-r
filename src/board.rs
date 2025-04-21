@@ -2,7 +2,7 @@ use bitvec::{order::Lsb0, store::BitStore, view::BitView};
 
 use crate::{
     bitboard::*,
-    r#move::{Move, MoveError, Piece, compute_knight, compute_pawn, compute_slider},
+    r#move::{Move, MoveError, Piece, *},
 };
 use std::{
     collections::HashMap,
@@ -475,7 +475,7 @@ impl BoardState {
                         is_pawn_double: false,
                         is_castle: true,
                     });
-                } else if pl[king_square - 2] == PieceType::None && pl[king_square - 1] == PieceType::None{
+                } else if pl[king_square - 2] == PieceType::None && pl[king_square - 1] == PieceType::None && pl[king_square - 3] == PieceType::None {
                     bitboard
                         .state
                         .view_bits_mut::<Lsb0>()

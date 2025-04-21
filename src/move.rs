@@ -18,9 +18,15 @@ pub struct Move {
     pub target: usize,
     pub captures: Option<Piece>,
     pub is_pawn_double: bool, // en passant tracker
-    pub is_castle: bool
+    pub is_castle: bool,
 }
-
+impl Move {
+    fn set_start(&self, pos: usize) -> Self {
+        let mut clone = self.clone();
+        clone.start = pos;
+        clone
+    }
+}
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum MoveError {
     AttackedAlly,
@@ -89,8 +95,6 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
         _ => {
             panic!("Pawn movements for unconventional teams are unhandled"); // TODO: Dont forget to fix this if you add other teams
         }
-
-        
     };
 
     let pawn_view_range = forward_direction.signum();
@@ -122,7 +126,9 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
             let target_file = possible_target % 8;
             let start_file = piece.position % 8;
 
-            if (target_file.abs_diff(start_file) > 3) {continue};
+            if (target_file.abs_diff(start_file) > 3) {
+                continue;
+            };
 
             let target_piece_type = board.piece_list[possible_target];
 
@@ -132,7 +138,7 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
                 target: possible_target,
                 is_pawn_double: step == 2,
                 captures: target_piece,
-                is_castle: false
+                is_castle: false,
             };
             if target_piece_type == PieceType::None {
                 psuedolegalize_move(
@@ -146,7 +152,8 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
                     &mut computed_moves,
                     &mut bitboard,
                     resulting_move,
-                    is_square_attackable(board, piece, possible_target) && (offset_index != 1 && step == 1),
+                    is_square_attackable(board, piece, possible_target)
+                        && (offset_index != 1 && step == 1),
                 );
                 // Can't jump over it
                 break 'step_ray;
@@ -166,14 +173,16 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
                 target: en_pass,
                 is_pawn_double: false,
                 captures: target_piece,
-                is_castle: false
+                is_castle: false,
             };
-             
+
             psuedolegalize_move(
                 &mut computed_moves,
                 &mut bitboard,
                 resulting_move,
-                is_square_attackable(board, piece, en_pass) && board.en_passant_turn.unwrap() == board.turn_clock && target_piece_type == PieceType::Pawn,
+                is_square_attackable(board, piece, en_pass)
+                    && board.en_passant_turn.unwrap() == board.turn_clock
+                    && target_piece_type == PieceType::Pawn,
             );
         }
     }
@@ -246,7 +255,7 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
                 target: possible_target,
                 is_pawn_double: false,
                 captures: target_piece,
-                is_castle: false
+                is_castle: false,
             };
             psuedolegalize_move(
                 &mut computed_moves,
@@ -265,6 +274,7 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
 }
 
 // For nightrider, we could do this recursively until we get 0 results
+// compute_knight
 pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
     let knight_moves: [i32; 8] = [10, 17, -10, -17, 15, -15, 6, -6];
     let mut computed_moves: Vec<Move> = Vec::new();
@@ -283,19 +293,20 @@ pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
             target: possible_target,
             is_pawn_double: false,
             captures: target_piece,
-            is_castle: false
+            is_castle: false,
         };
 
         let target_file = possible_target % 8;
         let start_file = piece.position % 8;
-        
+
         // Disable stuff that lets you loop around the board, which seems to only happen laterally.
         // Do this by ignoring anything that is on file A/B if you're on H/G and vice versa
         psuedolegalize_move(
             &mut computed_moves,
             &mut bitboard,
             resulting_move,
-            is_square_attackable(board, piece, possible_target) && target_file.abs_diff(start_file) <= 2,
+            is_square_attackable(board, piece, possible_target)
+                && target_file.abs_diff(start_file) <= 2,
         );
     }
 

@@ -52,6 +52,6 @@ async fn main() {
     let (mut ctx, event_loop) = cb.build().unwrap();
 
     let mut state: MainState =
-        MainState::new(board_full_test, &mut ctx, player_team, ChessOpponent::Ada(Duration::from_millis(550))).unwrap();
+        MainState::new(board_full_test, &mut ctx, player_team, ChessOpponent::Ada(Duration::from_millis(1050))).unwrap();
     event::run(ctx, event_loop, state);
 }
