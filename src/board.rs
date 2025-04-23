@@ -535,7 +535,7 @@ impl BoardState {
 
         legal_moves
     }
-    pub fn prune_moves_for_team(
+    pub fn prune_moves_for_team_mut(
         &mut self,
         move_list: Vec<(Bitboard, Vec<Move>)>,
         team: Team,
@@ -555,6 +555,25 @@ impl BoardState {
         if pruned_list.len() == 0 && self.is_team_checked(self.active_team) {
             self.active_team_checkmate = true;
         }
+        pruned_list
+    }
+    pub fn prune_moves_for_team(
+        &self,
+        move_list: Vec<(Bitboard, Vec<Move>)>,
+        team: Team,
+    ) -> Vec<Move> {
+        let mut pruned_list: Vec<Move> = Vec::new();
+        move_list.iter().for_each(|(_, move_vector)| {
+            move_vector.iter().for_each(|available_move| {
+                let team_moving = self
+                    .get_square_team(available_move.start)
+                    .unwrap_or(Team::None);
+                if (team_moving == team) {
+                    pruned_list.push(*available_move);
+                }
+            })
+        });
+
         pruned_list
     }
     pub fn get_square_team(&self, square_idx: usize) -> Option<Team> {

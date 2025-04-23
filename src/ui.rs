@@ -445,6 +445,9 @@ impl event::EventHandler<ggez::GameError> for MainState {
         let mut canvas = graphics::Canvas::from_frame(ctx, Some(graphics::Color::from(BLACK)));
 
         if let Some(c_move) = self.queued_move {
+            if c_move.is_castle {
+                println!("Castling!");
+            }
             if let Ok(()) = self.board.make_move(c_move) {
                 self.play_sound(ctx, "piece_move", 0.1)?;
                 self.last_move_origin = Some(c_move.start);

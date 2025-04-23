@@ -10,7 +10,7 @@ use std::{
 use rand::{Rng, rng, seq::IndexedRandom};
 
 use crate::{
-    bitboard::{PieceType, Team},
+    bitboard::{Bitboard, PieceType, Team},
     board::{self, BoardState},
     r#move::{self, Move},
 };
@@ -69,17 +69,25 @@ fn evaluate_move(
     }
 
     let _ = virtual_board.make_move(ava_move);
-    eval_score += evaluate(virtual_board);
+    let legals_all = virtual_board.get_legal_moves();
+    let legals = virtual_board
+    .prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
+
+
+    eval_score += evaluate(virtual_board, legals_all);
 
     if ava_move.is_castle {
         eval_score += 580 * who_to_play
     }
 
-    if search_budget == 0 {
-        return eval_score;
+    let mut jiggle = rand::rng().random_range(-30..30);
+
+    if virtual_board.ply_clock > 6 {
+        jiggle = rand::rng().random_range(-70..70);
     }
-    let legals = virtual_board
-        .prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
+    if search_budget == 0 {
+        return eval_score + jiggle;
+    }
 
     if virtual_board.active_team == Team::White {
         let mut max = i32::MIN;
@@ -92,6 +100,7 @@ fn evaluate_move(
                 best_white,
                 best_black,
             );
+
             max = max.max(move_score);
             best_white = best_white.max(move_score);
 
@@ -120,7 +129,7 @@ fn evaluate_move(
         return min;
     }
 }
-fn evaluate_team(board: &BoardState, team: Team) -> i32 {
+fn evaluate_team(board: &BoardState, team: Team, legal_moves: Vec<Move>) -> i32 {
     let mut material = 0;
     for (idx, piece) in board.piece_list.iter().enumerate() {
         if board.get_square_team(idx).unwrap_or(Team::None) == team {
@@ -132,6 +141,10 @@ fn evaluate_team(board: &BoardState, team: Team) -> i32 {
         }
     }
 
+    // Rewards mobility, but kind of expensive
+    let available_moves = board.clone().prune_moves_for_team(board.get_legal_moves(), team);
+    material += available_moves.len() as i32 * 10;
+
     material
         + (if board.active_team_checkmate && board.active_team != team {
             100000000
@@ -139,9 +152,11 @@ fn evaluate_team(board: &BoardState, team: Team) -> i32 {
             0
         })
 }
-fn evaluate(board: &BoardState) -> i32 {
-    let white_eval = evaluate_team(board, Team::White);
-    let black_eval = evaluate_team(board, Team::Black);
+fn evaluate(board: &BoardState, all_moves: Vec<(Bitboard, Vec<Move>)>) -> i32 {
+    let wl = board.prune_moves_for_team(all_moves.clone(), Team::White);
+    let bl = board.prune_moves_for_team(all_moves, Team::Black);
+    let white_eval = evaluate_team(board, Team::White, wl);
+    let black_eval = evaluate_team(board, Team::Black, bl);
 
     return white_eval - black_eval;
 }
@@ -157,7 +172,7 @@ impl MoveComputer for ChessOpponent {
             ChessOpponent::Randy => pick_random_move(board),
             ChessOpponent::Ada(time_limit) => {
                 let mut legals =
-                    board.prune_moves_for_team(board.get_legal_moves(), board.active_team);
+                    board.prune_moves_for_team_mut(board.get_legal_moves(), board.active_team);
                 let mut current_best: Option<NegamaxEval> = None;
                 let mut current_worst: Option<NegamaxEval> = None;
                 let start_time = Instant::now();
