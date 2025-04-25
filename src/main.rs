@@ -8,8 +8,8 @@ pub mod bitboard;
 pub mod board;
 pub mod r#move;
 pub mod opponents;
+pub mod rules;
 pub mod ui;
-
 const START_POS_CHESS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 use std::time::Duration;
@@ -50,7 +50,12 @@ async fn main() {
 
     let (mut ctx, event_loop) = cb.build().unwrap();
 
-    let state: MainState =
-        MainState::new(board_full_test, &mut ctx, player_team, ChessOpponent::Ada(Duration::from_millis(1050))).unwrap();
+    let state: MainState = MainState::new(
+        board_full_test,
+        &mut ctx,
+        player_team,
+        ChessOpponent::Ada(Duration::from_millis(1050)),
+    )
+    .unwrap();
     event::run(ctx, event_loop, state);
 }

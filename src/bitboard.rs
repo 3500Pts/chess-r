@@ -12,7 +12,7 @@ pub enum Team {
     Black = 1,
     Both = 2,
     Red = 3,
-    None = 4
+    None = 4,
 }
 
 #[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
@@ -57,8 +57,7 @@ pub const PIECE_TYPE_ARRAY: [PieceType; 7] = [
     PieceType::King,
 ];
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Bitboard {
     pub state: u64,
 }
@@ -106,9 +105,7 @@ impl BitOrAssign for Bitboard {
 impl Not for Bitboard {
     type Output = Self;
     fn not(self) -> Self::Output {
-        Bitboard {
-            state: !self.state 
-        }
+        Bitboard { state: !self.state }
     }
 }
 impl BitAnd for Bitboard {

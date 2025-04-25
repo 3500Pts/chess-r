@@ -75,18 +75,28 @@ impl MoveHistoryEntry {
             PieceType::King => "k",
             PieceType::Rook => "r",
             PieceType::Bishop => "b",
-        }.to_uppercase();
+        }
+        .to_uppercase();
 
-
-        let capture_string = if self.captures { "x" } else {""};
+        let capture_string = if self.captures { "x" } else { "" };
         let file_array = ["a", "b", "c", "d", "e", "f", "g", "h"];
         let target_file = file_array[self.target % 8];
         let target_rank = (((self.target / 8) as i32) + 1).to_string();
-        let append_string = if self.mate { "#" } else if self.checks { "+" } else {""};
+        let append_string = if self.mate {
+            "#"
+        } else if self.checks {
+            "+"
+        } else {
+            ""
+        };
 
         if self.castle {
             let diff = self.target as i32 - self.start as i32;
-            if diff < 0 {return String::from("O-O-O")} else {return String::from("O-O")}
+            if diff < 0 {
+                return String::from("O-O-O");
+            } else {
+                return String::from("O-O");
+            }
         }
         format!("{piece_id}{capture_string}{target_file}{target_rank}{append_string}")
     }
@@ -107,7 +117,7 @@ pub struct MainState {
     pub opp_thread: Option<Receiver<Option<Move>>>,
     pub opponent: ChessOpponent,
     pub move_history: Vec<MoveHistoryEntry>, // for PGN
-    pub start_board: BoardState
+    pub start_board: BoardState,
 }
 
 impl MainState {
@@ -132,7 +142,7 @@ impl MainState {
             opponent,
             opp_thread: None,
             move_history: Vec::new(),
-            start_board: board_state
+            start_board: board_state,
         };
         s.board_legal_moves = Some(s.board.get_legal_moves());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
@@ -187,33 +197,44 @@ impl MainState {
         Ok(s)
     }
     pub fn to_pgn(&self) {
-
         let current_date = Utc::now().format("%Y-%m-%d");
         let bot_name = format!("Bot {}", self.opponent);
-        
-        let white_name = if self.player_team == Team::White { "Player" } else { &bot_name };
-        let black_name = if self.player_team != Team::White { "Player" } else { &bot_name };
+
+        let white_name = if self.player_team == Team::White {
+            "Player"
+        } else {
+            &bot_name
+        };
+        let black_name = if self.player_team != Team::White {
+            "Player"
+        } else {
+            &bot_name
+        };
 
         let result = "1-0";
 
-        let mut pgn_header = format!("[Event \"chess-r match\"]\n[Site \"chess-r\"]\n[Date \"{current_date}\"]\n[Round \"1\"]\n[White \"{white_name}\"]\n[Black \"{black_name}\"]\n[Result \"{result}\"]\n\n");
+        let mut pgn_header = format!(
+            "[Event \"chess-r match\"]\n[Site \"chess-r\"]\n[Date \"{current_date}\"]\n[Round \"1\"]\n[White \"{white_name}\"]\n[Black \"{black_name}\"]\n[Result \"{result}\"]\n\n"
+        );
 
         for (ply, move_data) in self.move_history.iter().enumerate() {
             let turn_string = if ply % 2 == 0 {
-                format!("{}.", (ply/2) + 1)
+                format!("{}.", (ply / 2) + 1)
             } else {
                 String::from("")
             };
 
-            pgn_header.push_str(
-                &format!("{turn_string}{} ", move_data.to_string())
-            );
+            pgn_header.push_str(&format!("{turn_string}{} ", move_data.to_string()));
         }
 
         println!("{pgn_header}");
     }
     fn end_game(&self) {
-        let opponent = if self.board.active_team == Team::White { Team::Black } else { Team::White };
+        let opponent = if self.board.active_team == Team::White {
+            Team::Black
+        } else {
+            Team::White
+        };
 
         if self.board.is_team_checked(self.board.active_team) {
             println!("Checkmate - {opponent:?} wins");
@@ -224,7 +245,7 @@ impl MainState {
     fn draw_board(&mut self, ctx: &mut Context, canvas: &mut Canvas) -> GameResult<()> {
         for rank in 0..8 {
             for file in 0..8 {
-                let square_number = 63 - (((7 - rank) * 8) + 7-file) as usize;
+                let square_number = 63 - (((7 - rank) * 8) + 7 - file) as usize;
                 // What an unholy if statement. TODO: Make it neater maybe
                 let default_color = if (rank + file) % 2 != 0 {
                     Color::from(LIGHT_SQUARE_COLOR)
@@ -241,9 +262,7 @@ impl MainState {
                             .view_bits::<Lsb0>()
                             .get(square_number);
 
-                        let board_team = self
-                            .board
-                            .get_square_team(selected_square);
+                        let board_team = self.board.get_square_team(selected_square);
                         if status_on_bitboard.unwrap().then_some(true).is_some()
                             && self.player_team == board_team
                         {
@@ -306,7 +325,11 @@ impl MainState {
                     )
                 } else if square_number <= 7 || square_number % 8 == 0 {
                     let file_array = ["a", "b", "c", "d", "e", "f", "g", "h"];
-                    let text_frag = if square_number <= 7 { file_array[square_number]} else {&((square_number / 8)+1).to_string()};
+                    let text_frag = if square_number <= 7 {
+                        file_array[square_number]
+                    } else {
+                        &((square_number / 8) + 1).to_string()
+                    };
                     let mut text_frag_str = String::from(text_frag);
                     if square_number == 0 {
                         text_frag_str.push('1');
@@ -347,7 +370,7 @@ impl MainState {
                 let square_bit_idx = 63 - ((rank * 8) + (7 - file)) as usize;
 
                 let square_team = self.board.get_square_team(square_bit_idx);
-                
+
                 if square_team != Team::None {
                     // We use the team id to compose the team part of the file name
                     let file_team =
@@ -419,7 +442,7 @@ impl MainState {
         let file = (x / SQUARE_SIZE).floor();
         let rank = (y / SQUARE_SIZE).floor();
 
-        63.0 - ((rank * 8.0) + (7.0-file))
+        63.0 - ((rank * 8.0) + (7.0 - file))
     }
     fn play_sound(&mut self, ctx: &mut Context, id: &str, volume: f32) -> GameResult<()> {
         let sound = self.sound_sources.get_mut(id).unwrap();
@@ -513,9 +536,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             // Attempt a move here if it's on the bitboard
 
             if let Some(selected_square) = self.selected_square {
-                let ss_team = self
-                    .board
-                    .get_square_team(selected_square);
+                let ss_team = self.board.get_square_team(selected_square);
 
                 if let Some(pl_moves) = &self.board_legal_moves {
                     self.queued_move = if self.player_team == self.board.active_team
@@ -562,7 +583,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
                     captures: c_move.captures.is_some(),
                     target: c_move.target,
                     start: c_move.start,
-                    castle: c_move.is_castle
+                    castle: c_move.is_castle,
                 })
             }
 

@@ -2,15 +2,17 @@
 // TODO: Add a timer that is passed to the opponent
 
 use std::{
-    cmp::Ordering, fmt, time::{Duration, Instant}
+    cmp::Ordering,
+    fmt,
+    time::{Duration, Instant},
 };
 
 use rand::{Rng, seq::IndexedRandom};
 
 use crate::{
     bitboard::{Bitboard, PieceType, Team},
-    board::{BoardState},
-    r#move::{Move},
+    board::BoardState,
+    r#move::Move,
 };
 
 const SCORES: [(PieceType, i32); 7] = [
@@ -69,8 +71,7 @@ fn evaluate_move(
     let _ = virtual_board.make_move(ava_move);
     let legals_all = virtual_board.get_legal_moves();
     let legals = virtual_board
-    .prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
-
+        .prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
 
     eval_score += evaluate(virtual_board, legals_all);
 
@@ -311,10 +312,7 @@ impl MoveComputer for ChessOpponent {
                         -1
                     };
 
-                    mapped_legals.push(NegamaxEval {
-                        eval,
-                        legal_move,
-                    })
+                    mapped_legals.push(NegamaxEval { eval, legal_move })
                 }
 
                 mapped_legals.sort_by(|a, b| b.eval.cmp(&a.eval));

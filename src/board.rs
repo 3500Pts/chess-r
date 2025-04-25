@@ -16,7 +16,7 @@ const SPLITTER: char = '/';
 pub fn compute_edges() -> [[usize; 8]; 64] {
     let mut square_list = [[0; 8]; 64];
 
-    for square_pos in 0..square_list.len() {
+    for (square_pos, entry) in square_list.iter_mut().enumerate() {
         let rank = square_pos.div_floor(8);
         let file = square_pos % 8;
 
@@ -25,7 +25,7 @@ pub fn compute_edges() -> [[usize; 8]; 64] {
         let left_dist = file;
         let right_dist = 7 - file;
 
-        square_list[square_pos] = [
+        *entry = [
             top_dist,
             bottom_dist,
             right_dist,
@@ -50,10 +50,7 @@ impl fmt::Display for FENErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::BadState => {
-                writeln!(
-                    f,
-                    "Bad character exists in the state section of FEN string"
-                )
+                writeln!(f, "Bad character exists in the state section of FEN string")
             }
             Self::BadTeam => {
                 writeln!(f, "Team char is not either 'b' or 'w'")
@@ -375,10 +372,11 @@ impl BoardState {
     fn update_capture_bitboards(&mut self) {
         for team_id in 0..Team::Black as usize {
             let mut capture_bitboard = Bitboard::default();
-            let legals = self.get_psuedolegal_moves(); // TODO: Make these legal moves
+            let legals = self.get_psuedolegal_moves();
 
-            for (square, (bitboard, _legal_move)) in legals.iter().enumerate().take(64) {
-                if self.get_square_team(square) as usize == team_id  {
+            for (square, (bitboard, _legal_moves)) in legals.iter().enumerate().take(64) {
+                if self.get_square_team(square) as usize == team_id {
+                  //  println!("{} {}", capture_bitboard, bitboard);
                     capture_bitboard |= *bitboard
                 }
             }
@@ -404,7 +402,9 @@ impl BoardState {
                 let bit_opt = pl[rank * 8 + file];
                 print!(
                     "{} ",
-                    display_map.get(&bit_opt).expect("Exception while rendering piece list: slot doesn't exist")
+                    display_map
+                        .get(&bit_opt)
+                        .expect("Exception while rendering piece list: slot doesn't exist")
                 );
             }
         }
@@ -523,8 +523,7 @@ impl BoardState {
 
             move_vector.iter().for_each(|available_move| {
                 let mut testing_board = *self; // EXPENSIVE? TODO: Decide whether or not to keep this
-                let team_moving = testing_board
-                    .get_square_team(available_move.start);
+                let team_moving = testing_board.get_square_team(available_move.start);
                 let move_att = testing_board.make_move(*available_move);
 
                 if move_att.is_ok() {
@@ -552,8 +551,7 @@ impl BoardState {
         let mut pruned_list: Vec<Move> = Vec::new();
         move_list.iter().for_each(|(_, move_vector)| {
             move_vector.iter().for_each(|available_move| {
-                let team_moving = self
-                    .get_square_team(available_move.start);
+                let team_moving = self.get_square_team(available_move.start);
                 if team_moving == team {
                     pruned_list.push(*available_move);
                 }
@@ -573,8 +571,7 @@ impl BoardState {
         let mut pruned_list: Vec<Move> = Vec::new();
         move_list.iter().for_each(|(_, move_vector)| {
             move_vector.iter().for_each(|available_move| {
-                let team_moving = self
-                    .get_square_team(available_move.start);
+                let team_moving = self.get_square_team(available_move.start);
                 if team_moving == team {
                     pruned_list.push(*available_move);
                 }
@@ -587,7 +584,6 @@ impl BoardState {
         let white_check = self.get_team_coverage(Team::White);
         let black_check = self.get_team_coverage(Team::Black);
 
-        
         {
             let white_bitcheck = white_check
                 .state
@@ -605,16 +601,15 @@ impl BoardState {
                     .then(|| Team::Black);
 
                 if let Some(_bbc) = black_bitcheck {
-                    return Team::Black
+                    return Team::Black;
                 } else {
                     // There is not a piece here.
-                    return Team::None
+                    return Team::None;
                 }
-            } else {    
-                return Team::White
+            } else {
+                return Team::White;
             }
         }
-        return Team::None
     }
     pub fn make_move(&mut self, r#move: Move) -> Result<(), MoveError> {
         // Update out of the target positions
@@ -720,8 +715,6 @@ impl BoardState {
     }
     pub fn get_piece_at_pos(&self, pos: usize) -> Option<Piece> {
         let target_piece_type = self.piece_list[pos];
-
-        
 
         if target_piece_type != PieceType::None {
             Some(Piece {

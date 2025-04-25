@@ -212,7 +212,9 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
 
     // Push in each available direction for the rider until it hits an edge or an occupied spot.
     let square_bit_index = piece.position;
-    for index in index_start..index_end {
+
+    // index is a direction
+    for (index, direction_add) in DIRECTION_OFFSETS.iter().enumerate().take(index_end).skip(index_start)  {
         let mut indexed_direction = board.edge_compute[square_bit_index][index];
 
         if indexed_direction >= 1 {
@@ -239,7 +241,7 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
 
         'raycast_check: for raycast in 1..=indexed_direction {
             let possible_target =
-                (square_bit_index as i32 + (raycast as i32 * DIRECTION_OFFSETS[index])) as usize;
+                (square_bit_index as i32 + (raycast as i32 * direction_add)) as usize;
 
             if !(0..board.piece_list.len()).contains(&possible_target) {
                 break 'raycast_check;
