@@ -106,7 +106,7 @@ fn evaluate_move(
                 break;
             }
         }
-        return max;
+        max
     } else {
         let mut min = i32::MAX;
         for legal_move in legals {
@@ -124,7 +124,7 @@ fn evaluate_move(
                 break;
             }
         }
-        return min;
+        min
     }
 }
 fn evaluate_team(board: &BoardState, team: Team, available_moves: Vec<Move>) -> i32 {
@@ -155,7 +155,7 @@ fn evaluate(board: &BoardState, all_moves: Vec<(Bitboard, Vec<Move>)>) -> i32 {
     let white_eval = evaluate_team(board, Team::White, wl);
     let black_eval = evaluate_team(board, Team::Black, bl);
 
-    return white_eval - black_eval;
+    white_eval - black_eval
 }
 impl fmt::Display for ChessOpponent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -168,7 +168,7 @@ pub trait MoveComputer {
 
 impl MoveComputer for ChessOpponent {
     fn get_move(&mut self, board: BoardState) -> Option<Move> {
-        let mut board = board.clone();
+        let mut board = board;
         let result = match self {
             ChessOpponent::Randy => pick_random_move(board),
             ChessOpponent::Ada(time_limit) => {
@@ -238,13 +238,13 @@ impl MoveComputer for ChessOpponent {
                         };
 
                         mapped_legals.push(NegamaxEval {
-                            eval: eval,
+                            eval,
                             legal_move: *legal_move,
                         })
                     }
 
                     mapped_legals.sort_by(|a, b| b.eval.cmp(&a.eval));
-                    if mapped_legals.len() > 0 {
+                    if !mapped_legals.is_empty() {
                         if let Some(current_best_move) = current_best {
                             current_best = if current_best_move.eval < mapped_legals[0].eval {
                                 Some(mapped_legals[0])
@@ -271,10 +271,8 @@ impl MoveComputer for ChessOpponent {
                             mapped_legals[0].eval
                         );
                         println!("Mapped legals ply {search_budget}: {:?}", mapped_legals);
-                    } else {
-                        if let Some(current_best_move) = current_best {
-                            mapped_legals.push(current_best_move);
-                        }
+                    } else if let Some(current_best_move) = current_best {
+                        mapped_legals.push(current_best_move);
                     }
                     if will_break {
                         break;
@@ -314,8 +312,8 @@ impl MoveComputer for ChessOpponent {
                     };
 
                     mapped_legals.push(NegamaxEval {
-                        eval: eval,
-                        legal_move: legal_move,
+                        eval,
+                        legal_move,
                     })
                 }
 
@@ -326,7 +324,7 @@ impl MoveComputer for ChessOpponent {
                     mapped_legals[mapped_legals.len() - 1].eval
                 );
 
-                if mapped_legals.len() > 0 {
+                if !mapped_legals.is_empty() {
                     Some(mapped_legals[0].legal_move)
                 } else {
                     None

@@ -58,6 +58,7 @@ pub const PIECE_TYPE_ARRAY: [PieceType; 7] = [
 ];
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Default)]
 pub struct Bitboard {
     pub state: u64,
 }
@@ -92,9 +93,9 @@ impl BitOr for Bitboard {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        return Bitboard {
+        Bitboard {
             state: self.state | rhs.state,
-        };
+        }
     }
 }
 impl BitOrAssign for Bitboard {
@@ -105,28 +106,23 @@ impl BitOrAssign for Bitboard {
 impl Not for Bitboard {
     type Output = Self;
     fn not(self) -> Self::Output {
-        return Bitboard {
+        Bitboard {
             state: !self.state 
-        };
+        }
     }
 }
 impl BitAnd for Bitboard {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
-        return Bitboard {
+        Bitboard {
             state: self.state & rhs.state,
-        };
+        }
     }
 }
 impl BitAndAssign for Bitboard {
     fn bitand_assign(&mut self, rhs: Self) {
         self.state &= rhs.state
-    }
-}
-impl Default for Bitboard {
-    fn default() -> Self {
-        Bitboard { state: 0 }
     }
 }
 
@@ -141,8 +137,8 @@ impl Bitboard {
         if let Some(rank_id) = rank {
             let file = split[1].to_digit(10);
             if let Some(file_id) = file {
-                let result = ((rank_id as usize) * 8) + (file_id as usize);
-                return Some(result);
+                let result = (rank_id * 8) + (file_id as usize);
+                Some(result)
             } else {
                 None
             }

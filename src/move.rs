@@ -22,7 +22,7 @@ pub struct Move {
 }
 impl Move {
     fn set_start(&self, pos: usize) -> Self {
-        let mut clone = self.clone();
+        let mut clone = *self;
         clone.start = pos;
         clone
     }
@@ -233,7 +233,7 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
             continue;
         }
 
-        if square_bit_index == 0 {}
+        square_bit_index == 0;
 
         if piece.piece_type == PieceType::King {
             indexed_direction = 1;

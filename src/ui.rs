@@ -44,12 +44,12 @@ pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 pub fn color_lerp(left: Color, right: Color, t: f32) -> Color {
-    return Color::from([
+    Color::from([
         lerp(left.r, right.r, t),
         lerp(left.g, right.g, t),
         lerp(left.b, right.b, t),
         lerp(left.a, right.a, t),
-    ]);
+    ])
 }
 
 #[derive(Clone, Copy)]
@@ -82,7 +82,7 @@ impl MoveHistoryEntry {
         let file_array = ["a", "b", "c", "d", "e", "f", "g", "h"];
         let target_file = file_array[self.target % 8];
         let target_rank = (((self.target / 8) as i32) + 1).to_string();
-        let append_string = if self.mate { "#" } else { if self.checks { "+" } else {""}};
+        let append_string = if self.mate { "#" } else if self.checks { "+" } else {""};
 
         if self.castle {
             let diff = self.target as i32 - self.start as i32;
@@ -129,10 +129,10 @@ impl MainState {
             last_move_origin: None,
             last_move_end: None,
             player_team: plr_team,
-            opponent: opponent,
+            opponent,
             opp_thread: None,
             move_history: Vec::new(),
-            start_board: board_state.clone()
+            start_board: board_state
         };
         s.board_legal_moves = Some(s.board.get_legal_moves());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
@@ -442,7 +442,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             let board_clone = self.board;
 
             tokio::spawn(async move {
-                let legal = (&mut opponent_clone).get_move(board_clone);
+                let legal = opponent_clone.get_move(board_clone);
                 mv_tx.send(legal).unwrap();
             });
             self.opp_thread = Some(mv_rx);

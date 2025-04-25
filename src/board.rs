@@ -50,16 +50,16 @@ impl fmt::Display for FENErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::BadState => {
-                write!(
+                writeln!(
                     f,
-                    "Bad character exists in the state section of FEN string\n"
+                    "Bad character exists in the state section of FEN string"
                 )
             }
             Self::BadTeam => {
-                write!(f, "Team char is not either 'b' or 'w'\n")
+                writeln!(f, "Team char is not either 'b' or 'w'")
             }
             Self::MalformedNumber => {
-                write!(f, "Turn/halfmove clock characters malformed\n")
+                writeln!(f, "Turn/halfmove clock characters malformed")
             }
         }
     }
@@ -406,7 +406,7 @@ impl BoardState {
                 );
             }
         }
-        print!("\n");
+        println!();
     }
     pub fn get_team_coverage(&self, team: Team) -> Bitboard {
         let mut result = Bitboard::default();
@@ -419,7 +419,7 @@ impl BoardState {
         result
     }
     pub fn get_psuedolegal_moves(&self) -> Vec<(Bitboard, Vec<Move>)> {
-        let pl = self.piece_list.clone();
+        let pl = self.piece_list;
         let mut move_list: Vec<(Bitboard, Vec<Move>)> = Vec::new(); // The bitboard is used for highlighting moves the selected square has
 
         pl.iter().enumerate().for_each(|(index, piece_type)| {
@@ -430,7 +430,7 @@ impl BoardState {
                 let piece_obj = Piece {
                     piece_type: *piece_type,
                     position: index,
-                    team: team,
+                    team,
                 };
                 let (psuedo_bitboard, psuedo_moves) = match piece_type {
                     PieceType::Bishop | PieceType::Rook | &PieceType::Queen | PieceType::King => {
@@ -520,7 +520,7 @@ impl BoardState {
             let mut lm_vector: Vec<Move> = Vec::new();
 
             move_vector.iter().for_each(|available_move| {
-                let mut testing_board = self.clone(); // EXPENSIVE? TODO: Decide whether or not to keep this
+                let mut testing_board = *self; // EXPENSIVE? TODO: Decide whether or not to keep this
                 let team_moving = testing_board
                     .get_square_team(available_move.start)
                     .unwrap_or(Team::None);
@@ -560,7 +560,7 @@ impl BoardState {
             })
         });
 
-        if pruned_list.len() == 0 && self.is_team_checked(self.active_team) {
+        if pruned_list.is_empty() && self.is_team_checked(self.active_team) {
             self.active_team_checkmate = true;
         }
         pruned_list
@@ -588,7 +588,8 @@ impl BoardState {
         let white_check = self.get_team_coverage(Team::White);
         let black_check = self.get_team_coverage(Team::Black);
 
-        let square_team = {
+        
+        {
             let white_bitcheck = white_check
                 .state
                 .view_bits::<Lsb0>()
@@ -613,8 +614,7 @@ impl BoardState {
             } else {
                 white_bitcheck
             }
-        };
-        square_team
+        }
     }
     pub fn make_move(&mut self, r#move: Move) -> Result<(), MoveError> {
         // Update out of the target positions
@@ -625,7 +625,7 @@ impl BoardState {
         if r#move.start == r#move.target {
             return Err(MoveError::NotAMove);
         }
-        if square_team_opt == None {
+        if square_team_opt.is_none() {
             return Err(MoveError::NoUnit);
         }
         if target_team_opt == square_team_opt {
@@ -704,7 +704,7 @@ impl BoardState {
             }
         }
 
-        return Ok(());
+        Ok(())
     }
     pub fn opponent_attacking_square(&self, pos: usize) -> bool {
         let enemy_capture_bitboard = (self.capture_bitboard[Team::White as usize]
@@ -722,7 +722,9 @@ impl BoardState {
     pub fn get_piece_at_pos(&self, pos: usize) -> Option<Piece> {
         let target_piece_type = self.piece_list[pos];
 
-        let target_piece = if target_piece_type != PieceType::None {
+        
+
+        if target_piece_type != PieceType::None {
             Some(Piece {
                 team: self.get_square_team(pos).unwrap_or(Team::None),
                 position: pos,
@@ -730,8 +732,6 @@ impl BoardState {
             })
         } else {
             None
-        };
-
-        target_piece
+        }
     }
 }
