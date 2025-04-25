@@ -401,7 +401,10 @@ impl BoardState {
 
             for file in 0..8 {
                 let bit_opt = pl[rank * 8 + file];
-                print!("{} ", display_map.get(&bit_opt).unwrap());
+                print!(
+                    "{} ",
+                    display_map.get(&bit_opt).expect("Exception while rendering piece list: slot doesn't exist")
+                );
             }
         }
         print!("\n");
@@ -452,7 +455,7 @@ impl BoardState {
 
             if castling_rights_bits
                 .get(castling_move)
-                .unwrap()
+                .expect("Attempted to access out-of-bounds castling bit")
                 .then_some(1)
                 .is_some()
             {
@@ -463,7 +466,10 @@ impl BoardState {
                 };
                 let (bitboard, move_vec) = &mut move_list[king_square];
 
-                if (castling_move == 0 || castling_move == 2) && pl[king_square + 2] == PieceType::None && pl[king_square + 1] == PieceType::None {
+                if (castling_move == 0 || castling_move == 2)
+                    && pl[king_square + 2] == PieceType::None
+                    && pl[king_square + 1] == PieceType::None
+                {
                     bitboard
                         .state
                         .view_bits_mut::<Lsb0>()
@@ -475,7 +481,10 @@ impl BoardState {
                         is_pawn_double: false,
                         is_castle: true,
                     });
-                } else if pl[king_square - 2] == PieceType::None && pl[king_square - 1] == PieceType::None && pl[king_square - 3] == PieceType::None {
+                } else if pl[king_square - 2] == PieceType::None
+                    && pl[king_square - 1] == PieceType::None
+                    && pl[king_square - 3] == PieceType::None
+                {
                     bitboard
                         .state
                         .view_bits_mut::<Lsb0>()
@@ -684,7 +693,6 @@ impl BoardState {
             };
             self.en_passant_turn = Some(self.turn_clock);
 
-            
             // Crudely handle promotions by queening any pawns that finished
 
             self.update_capture_bitboards();
@@ -715,7 +723,7 @@ impl BoardState {
     pub fn get_piece_at_pos(&self, pos: usize) -> Option<Piece> {
         let target_piece_type = self.piece_list[pos];
 
-        let target_piece = if target_piece_type == PieceType::None {
+        let target_piece = if target_piece_type != PieceType::None {
             Some(Piece {
                 team: self.get_square_team(pos).unwrap_or(Team::None),
                 position: pos,

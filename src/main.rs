@@ -1,6 +1,7 @@
 #![feature(int_roundings)]
 #![feature(try_find)]
 #![feature(mpmc_channel)]
+#![feature(string_remove_matches)]
 //#![windows_subsystem = "windows"]
 
 pub mod bitboard;
@@ -10,8 +11,6 @@ pub mod opponents;
 pub mod ui;
 
 const START_POS_CHESS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
-const CASTLING_TEST: &str = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1";
 
 use std::time::Duration;
 

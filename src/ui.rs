@@ -24,12 +24,16 @@ use ggez::mint::Vector2;
 use ggez::{Context, GameResult};
 
 use crate::bitboard::Bitboard;
+use crate::bitboard::CHESS_FILE_ARRAY;
 use crate::bitboard::PIECE_TYPE_ARRAY;
 use crate::bitboard::PieceType;
 use crate::bitboard::Team;
 use crate::board::BoardState;
+use crate::r#move;
 use crate::r#move::Move;
+use crate::r#move::Piece;
 use crate::opponents::*;
+use chrono::prelude::*;
 
 pub type ColorRGBA = [f32; 4];
 
@@ -41,7 +45,7 @@ const LIGHT_SQUARE_COLOR: ColorRGBA = [0.941, 0.467, 0.467, 1.0];
 const DARK_SQUARE_COLOR: ColorRGBA = [0.651, 0.141, 0.141, 1.0];
 const WIDTH: f32 = 600.0;
 const SQUARE_SIZE: f32 = WIDTH / 8.0;
-const FLAG_DEBUG_UI_COORDS: bool = true;
+const FLAG_DEBUG_UI_COORDS: bool = false;
 
 pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
@@ -54,6 +58,47 @@ pub fn color_lerp(left: Color, right: Color, t: f32) -> Color {
         lerp(left.a, right.a, t),
     ]);
 }
+
+#[derive(Clone, Copy)]
+pub struct MoveHistoryEntry {
+    piece_type: PieceType,
+    team: Team,
+    captures: bool,
+    checks: bool,
+    mate: bool,
+    target: usize,
+    start: usize,
+    castle: bool,
+}
+impl MoveHistoryEntry {
+    pub fn to_string(self) -> String {
+        // TODO: Piece disambiguation
+
+        let piece_id = match self.piece_type {
+            PieceType::None => "",
+            PieceType::Pawn => "",
+            PieceType::Knight => "n",
+            PieceType::Queen => "q",
+            PieceType::King => "k",
+            PieceType::Rook => "r",
+            PieceType::Bishop => "b",
+        }.to_uppercase();
+
+
+        let capture_string = if self.captures { "x" } else {""};
+        let file_array = ["a", "b", "c", "d", "e", "f", "g", "h"];
+        let target_file = file_array[self.target % 8];
+        let target_rank = (((self.target / 8) as i32) + 1).to_string();
+        let append_string = if self.mate { "#" } else { if self.checks { "+" } else {""}};
+
+        if self.castle {
+            let diff = self.target as i32 - self.start as i32;
+            return if diff < 0 {String::from("O-O-O")} else {String::from("O-O")}
+        }
+        return format!("{piece_id}{capture_string}{target_file}{target_rank}{append_string}")
+    }
+}
+
 pub struct MainState {
     pub board: BoardState,
     pub piece_imgs: HashMap<String, Image>,
@@ -68,6 +113,8 @@ pub struct MainState {
     pub player_team: Team,
     pub opp_thread: Option<Receiver<Option<Move>>>,
     pub opponent: ChessOpponent,
+    pub move_history: Vec<MoveHistoryEntry>, // for PGN
+    pub start_board: BoardState
 }
 
 impl MainState {
@@ -91,6 +138,8 @@ impl MainState {
             player_team: plr_team,
             opponent: opponent,
             opp_thread: None,
+            move_history: Vec::new(),
+            start_board: board_state.clone()
         };
         s.board_legal_moves = Some(s.board.get_legal_moves());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
@@ -127,7 +176,7 @@ impl MainState {
         });
 
         // Preload sounds
-        let sound_paths = vec![
+        let sound_paths = [
             "bass_intro".to_string(),
             "piece_move".to_string(),
             "capture".to_string(),
@@ -144,12 +193,47 @@ impl MainState {
         });
         Ok(s)
     }
+    pub fn to_pgn(&self) {
+
+        let current_date = Utc::now().format("%Y-%m-%d");
+        let mut bot_name = format!("Bot {}", self.opponent.to_string());
+        
+        let white_name = if self.player_team == Team::White { "Player" } else { &bot_name };
+        let black_name = if self.player_team != Team::White { "Player" } else { &bot_name };
+
+        let result = "1-0";
+
+        let mut pgn_header = format!("[Event \"chess-r match\"]\n[Site \"chess-r\"]\n[Date \"{current_date}\"]\n[Round \"1\"]\n[White \"{white_name}\"]\n[Black \"{black_name}\"]\n[Result \"{result}\"]\n\n");
+
+        for (ply, move_data) in self.move_history.iter().enumerate() {
+            let turn_string = if ply % 2 == 0 {
+                format!("{}.", (ply/2) + 1)
+            } else {
+                String::from("")
+            };
+
+            pgn_header.push_str(
+                &format!("{turn_string}{} ", move_data.to_string())
+            );
+        }
+
+        println!("{pgn_header}");
+    }
+    fn end_game(&self) {
+        let opponent = if self.board.active_team == Team::White { Team::Black } else { Team::White };
+
+        if self.board.is_team_checked(self.board.active_team) {
+            println!("Checkmate - {opponent:?} wins");
+        } else {
+            println!("Stalemate");
+        }
+    }
     fn draw_board(&mut self, ctx: &mut Context, canvas: &mut Canvas) -> GameResult<()> {
         for rank in 0..8 {
             for file in 0..8 {
-                let square_number = 63 - (((7 - rank) * 8) + file) as usize;
+                let square_number = 63 - (((7 - rank) * 8) + 7-file) as usize;
                 // What an unholy if statement. TODO: Make it neater maybe
-                let default_color = if (rank + file) % 2 == 0 {
+                let default_color = if (rank + file) % 2 != 0 {
                     Color::from(LIGHT_SQUARE_COLOR)
                 } else {
                     Color::from(DARK_SQUARE_COLOR)
@@ -228,6 +312,34 @@ impl MainState {
                             .to_bare_matrix()
                         }),
                     )
+                } else if square_number <= 7 || square_number % 8 == 0 {
+                    let file_array = ["a", "b", "c", "d", "e", "f", "g", "h"];
+                    let text_frag = if (square_number <= 7) { file_array[square_number]} else {&((square_number / 8)+1).to_string()};
+                    let mut text_frag_str = String::from(text_frag);
+                    if square_number == 0 {
+                        text_frag_str.push('1');
+                    }
+
+                    let mut text_mesh = Text::new(text_frag_str);
+                    text_mesh.set_bounds(Vector2 {
+                        x: SQUARE_SIZE,
+                        y: SQUARE_SIZE,
+                    });
+                    canvas.draw(
+                        &text_mesh,
+                        DrawParam::default().transform({
+                            Transform::Values {
+                                dest: Point2 {
+                                    x: file as f32 * SQUARE_SIZE,
+                                    y: (7 - rank) as f32 * SQUARE_SIZE,
+                                },
+                                rotation: 0.0,
+                                scale: Vector2 { x: 1.0, y: 1.0 },
+                                offset: Point2 { x: 0.5, y: 0.5 },
+                            }
+                            .to_bare_matrix()
+                        }),
+                    )
                 }
             }
         }
@@ -240,7 +352,7 @@ impl MainState {
 
         for rank in (0..8).rev() {
             for file in 0..8 {
-                let square_bit_idx = 63 - ((rank * 8) + file) as usize;
+                let square_bit_idx = 63 - ((rank * 8) + (7 - file)) as usize;
 
                 let square_team_opt = self.board.get_square_team(square_bit_idx);
 
@@ -315,7 +427,7 @@ impl MainState {
         let file = (x / SQUARE_SIZE).floor();
         let rank = (y / SQUARE_SIZE).floor();
 
-        return 63.0 - ((rank * 8.0) + file);
+        return 63.0 - ((rank * 8.0) + (7.0-file));
     }
     fn play_sound(&mut self, ctx: &mut Context, id: &str, volume: f32) -> GameResult<()> {
         let sound = self.sound_sources.get_mut(id).unwrap();
@@ -348,13 +460,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
                 if let Ok(legal_move) = legal {
                     if legal_move.is_none() {
-                        let opponent = if self.board.active_team == Team::White { Team::Black } else { Team::White };
-
-                        if self.board.is_team_checked(self.board.active_team) {
-                            println!("Checkmate - {opponent:?} wins");
-                        } else {
-                            println!("Stalemate");
-                        }
+                        self.end_game();
+                        self.to_pgn();
                     }
                     legal_move
                 } else {
@@ -449,11 +556,23 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 println!("Castling!");
             }
             if let Ok(()) = self.board.make_move(c_move) {
+                let moving_piece_type = self.board.piece_list[c_move.target];
+                let moving_piece_team = self.board.get_square_team(c_move.target).unwrap_or(Team::None);
                 self.play_sound(ctx, "piece_move", 0.1)?;
                 self.last_move_origin = Some(c_move.start);
                 self.last_move_end = Some(c_move.target);
                 // Regenerate moves
-                self.board_legal_moves = Some(self.board.get_legal_moves())
+                self.board_legal_moves = Some(self.board.get_legal_moves());
+                self.move_history.push(MoveHistoryEntry {
+                    piece_type: moving_piece_type,
+                    team: moving_piece_team,
+                    checks: self.board.is_team_checked(self.board.active_team),
+                    mate: self.board.active_team_checkmate,
+                    captures: c_move.captures.is_some(),
+                    target: c_move.target,
+                    start: c_move.start,
+                    castle: c_move.is_castle
+                })
             }
 
             tracing::debug!(

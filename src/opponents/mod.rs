@@ -2,9 +2,7 @@
 // TODO: Add a timer that is passed to the opponent
 
 use std::{
-    cmp::Ordering,
-    collections::HashMap,
-    time::{Duration, Instant},
+    cmp::Ordering, collections::HashMap, fmt, time::{Duration, Instant}
 };
 
 use rand::{Rng, rng, seq::IndexedRandom};
@@ -160,7 +158,11 @@ fn evaluate(board: &BoardState, all_moves: Vec<(Bitboard, Vec<Move>)>) -> i32 {
 
     return white_eval - black_eval;
 }
-
+impl fmt::Display for ChessOpponent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 pub trait MoveComputer {
     fn get_move(&mut self, board: BoardState) -> Option<Move>;
 }
