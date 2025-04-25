@@ -2,15 +2,15 @@
 // TODO: Add a timer that is passed to the opponent
 
 use std::{
-    cmp::Ordering, collections::HashMap, fmt, time::{Duration, Instant}
+    cmp::Ordering, fmt, time::{Duration, Instant}
 };
 
-use rand::{Rng, rng, seq::IndexedRandom};
+use rand::{Rng, seq::IndexedRandom};
 
 use crate::{
     bitboard::{Bitboard, PieceType, Team},
-    board::{self, BoardState},
-    r#move::{self, Move},
+    board::{BoardState},
+    r#move::{Move},
 };
 
 const SCORES: [(PieceType, i32); 7] = [
@@ -35,7 +35,7 @@ pub enum ChessOpponent {
     Ada(Duration),
 }
 
-fn pick_random_move(mut board: BoardState) -> Option<Move> {
+fn pick_random_move(board: BoardState) -> Option<Move> {
     let legals = board.prune_moves_for_team(board.get_legal_moves(), board.active_team);
     legals.choose(&mut rand::rng()).copied()
 }
@@ -127,7 +127,7 @@ fn evaluate_move(
         return min;
     }
 }
-fn evaluate_team(board: &BoardState, team: Team, legal_moves: Vec<Move>) -> i32 {
+fn evaluate_team(board: &BoardState, team: Team, available_moves: Vec<Move>) -> i32 {
     let mut material = 0;
     for (idx, piece) in board.piece_list.iter().enumerate() {
         if board.get_square_team(idx).unwrap_or(Team::None) == team {
@@ -140,7 +140,6 @@ fn evaluate_team(board: &BoardState, team: Team, legal_moves: Vec<Move>) -> i32 
     }
 
     // Rewards mobility, but kind of expensive
-    let available_moves = board.clone().prune_moves_for_team(board.get_legal_moves(), team);
     material += available_moves.len() as i32 * 10;
 
     material

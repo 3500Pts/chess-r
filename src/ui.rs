@@ -1,9 +1,5 @@
 use std::collections::HashMap;
-use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
-use std::thread::JoinHandle;
-use std::time::Duration;
-use std::time::Instant;
 
 use bitvec::order::Lsb0;
 use bitvec::view::BitView;
@@ -24,14 +20,11 @@ use ggez::mint::Vector2;
 use ggez::{Context, GameResult};
 
 use crate::bitboard::Bitboard;
-use crate::bitboard::CHESS_FILE_ARRAY;
 use crate::bitboard::PIECE_TYPE_ARRAY;
 use crate::bitboard::PieceType;
 use crate::bitboard::Team;
 use crate::board::BoardState;
-use crate::r#move;
 use crate::r#move::Move;
-use crate::r#move::Piece;
 use crate::opponents::*;
 use chrono::prelude::*;
 
@@ -93,9 +86,9 @@ impl MoveHistoryEntry {
 
         if self.castle {
             let diff = self.target as i32 - self.start as i32;
-            return if diff < 0 {String::from("O-O-O")} else {String::from("O-O")}
+            if diff < 0 {return String::from("O-O-O")} else {return String::from("O-O")}
         }
-        return format!("{piece_id}{capture_string}{target_file}{target_rank}{append_string}")
+        format!("{piece_id}{capture_string}{target_file}{target_rank}{append_string}")
     }
 }
 
@@ -196,7 +189,7 @@ impl MainState {
     pub fn to_pgn(&self) {
 
         let current_date = Utc::now().format("%Y-%m-%d");
-        let mut bot_name = format!("Bot {}", self.opponent.to_string());
+        let bot_name = format!("Bot {}", self.opponent);
         
         let white_name = if self.player_team == Team::White { "Player" } else { &bot_name };
         let black_name = if self.player_team != Team::White { "Player" } else { &bot_name };
@@ -314,7 +307,7 @@ impl MainState {
                     )
                 } else if square_number <= 7 || square_number % 8 == 0 {
                     let file_array = ["a", "b", "c", "d", "e", "f", "g", "h"];
-                    let text_frag = if (square_number <= 7) { file_array[square_number]} else {&((square_number / 8)+1).to_string()};
+                    let text_frag = if square_number <= 7 { file_array[square_number]} else {&((square_number / 8)+1).to_string()};
                     let mut text_frag_str = String::from(text_frag);
                     if square_number == 0 {
                         text_frag_str.push('1');
@@ -386,7 +379,7 @@ impl MainState {
                     let image = self
                         .piece_imgs
                         .get(&square_piece_id)
-                        .expect(&format!("Couldn't find piece png for {square_piece_id}"));
+                        .unwrap_or_else(|| panic!("Couldn't find piece png for {square_piece_id}"));
 
                     let piece_x = file as f32 * SQUARE_SIZE;
                     let piece_y = rank as f32 * SQUARE_SIZE;
@@ -427,7 +420,7 @@ impl MainState {
         let file = (x / SQUARE_SIZE).floor();
         let rank = (y / SQUARE_SIZE).floor();
 
-        return 63.0 - ((rank * 8.0) + (7.0-file));
+        63.0 - ((rank * 8.0) + (7.0-file))
     }
     fn play_sound(&mut self, ctx: &mut Context, id: &str, volume: f32) -> GameResult<()> {
         let sound = self.sound_sources.get_mut(id).unwrap();
@@ -515,7 +508,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
         x: f32,
         y: f32,
     ) -> Result<(), ggez::GameError> {
-        if button == event::MouseButton::Left && self.queued_move == None {
+        if button == event::MouseButton::Left && self.queued_move.is_none() {
             let target_square_idx = MainState::get_square_idx_from_pixel(x, y) as usize;
             tracing::debug!("Mouse up at square {}", target_square_idx);
             // Attempt a move here if it's on the bitboard

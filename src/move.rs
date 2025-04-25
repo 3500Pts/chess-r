@@ -126,7 +126,7 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
             let target_file = possible_target % 8;
             let start_file = piece.position % 8;
 
-            if (target_file.abs_diff(start_file) > 3) {
+            if target_file.abs_diff(start_file) > 3 {
                 continue;
             };
 
@@ -285,8 +285,6 @@ pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
         if !(0..board.piece_list.len()).contains(&possible_target) {
             continue;
         };
-        let target_piece_type = board.piece_list[possible_target];
-
         let target_piece = board.get_piece_at_pos(possible_target);
         let resulting_move = Move {
             start: piece.position,

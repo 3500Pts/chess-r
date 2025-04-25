@@ -1,4 +1,4 @@
-use bitvec::{order::Lsb0, store::BitStore, view::BitView};
+use bitvec::{order::Lsb0, view::BitView};
 
 use crate::{
     bitboard::*,
@@ -7,7 +7,6 @@ use crate::{
 use std::{
     collections::HashMap,
     fmt::{self},
-    io::Read,
 };
 
 const LIST_OF_PIECES: &str = "kqrbnpKQRBNP";
@@ -503,11 +502,11 @@ impl BoardState {
         move_list
     }
     pub fn is_team_checked(&self, team: Team) -> bool {
-        let enemy_capture_bitboard = (self.capture_bitboard[Team::White as usize]
-            | self.capture_bitboard[Team::Black as usize]);
+        let enemy_capture_bitboard = self.capture_bitboard[Team::White as usize]
+            | self.capture_bitboard[Team::Black as usize];
 
         let in_check =
-            (enemy_capture_bitboard & self.board_pieces[team as usize][PieceType::King as usize]);
+            enemy_capture_bitboard & self.board_pieces[team as usize][PieceType::King as usize];
 
         in_check.state > 0
     }
@@ -555,7 +554,7 @@ impl BoardState {
                 let team_moving = self
                     .get_square_team(available_move.start)
                     .unwrap_or(Team::None);
-                if (team_moving == team) {
+                if team_moving == team {
                     pruned_list.push(*available_move);
                 }
             })
@@ -577,7 +576,7 @@ impl BoardState {
                 let team_moving = self
                     .get_square_team(available_move.start)
                     .unwrap_or(Team::None);
-                if (team_moving == team) {
+                if team_moving == team {
                     pruned_list.push(*available_move);
                 }
             })
