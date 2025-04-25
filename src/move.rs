@@ -56,7 +56,7 @@ fn is_square_attackable(board: &BoardState, piece: Piece, possible_target: usize
         true
     } else {
         // You can never attack your teammates
-        if target_team != Some(piece.team) {
+        if target_team != piece.team {
             true
         } else {
             tracing::debug!(
@@ -232,8 +232,6 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
             );
             continue;
         }
-
-        square_bit_index == 0;
 
         if piece.piece_type == PieceType::King {
             indexed_direction = 1;

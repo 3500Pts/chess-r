@@ -130,7 +130,7 @@ fn evaluate_move(
 fn evaluate_team(board: &BoardState, team: Team, available_moves: Vec<Move>) -> i32 {
     let mut material = 0;
     for (idx, piece) in board.piece_list.iter().enumerate() {
-        if board.get_square_team(idx).unwrap_or(Team::None) == team {
+        if board.get_square_team(idx) == team {
             let score_pt = SCORES
                 .iter()
                 .position(|(piece_type, _scre)| piece_type == piece);

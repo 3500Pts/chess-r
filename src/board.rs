@@ -377,8 +377,10 @@ impl BoardState {
             let mut capture_bitboard = Bitboard::default();
             let legals = self.get_psuedolegal_moves(); // TODO: Make these legal moves
 
-            for square in 0..64 {
-                capture_bitboard |= legals[square].0;
+            for (square, (bitboard, _legal_move)) in legals.iter().enumerate().take(64) {
+                if self.get_square_team(square) as usize == team_id  {
+                    capture_bitboard |= *bitboard
+                }
             }
             self.capture_bitboard[team_id] = capture_bitboard;
         }
@@ -425,8 +427,8 @@ impl BoardState {
         pl.iter().enumerate().for_each(|(index, piece_type)| {
             let default_push = (Bitboard::default(), vec![Move::default()]);
 
-            let team_opt = self.get_square_team(index);
-            if let Some(team) = team_opt {
+            let team = self.get_square_team(index);
+            if team != Team::None {
                 let piece_obj = Piece {
                     piece_type: *piece_type,
                     position: index,
@@ -522,8 +524,7 @@ impl BoardState {
             move_vector.iter().for_each(|available_move| {
                 let mut testing_board = *self; // EXPENSIVE? TODO: Decide whether or not to keep this
                 let team_moving = testing_board
-                    .get_square_team(available_move.start)
-                    .unwrap_or(Team::None);
+                    .get_square_team(available_move.start);
                 let move_att = testing_board.make_move(*available_move);
 
                 if move_att.is_ok() {
@@ -552,8 +553,7 @@ impl BoardState {
         move_list.iter().for_each(|(_, move_vector)| {
             move_vector.iter().for_each(|available_move| {
                 let team_moving = self
-                    .get_square_team(available_move.start)
-                    .unwrap_or(Team::None);
+                    .get_square_team(available_move.start);
                 if team_moving == team {
                     pruned_list.push(*available_move);
                 }
@@ -574,8 +574,7 @@ impl BoardState {
         move_list.iter().for_each(|(_, move_vector)| {
             move_vector.iter().for_each(|available_move| {
                 let team_moving = self
-                    .get_square_team(available_move.start)
-                    .unwrap_or(Team::None);
+                    .get_square_team(available_move.start);
                 if team_moving == team {
                     pruned_list.push(*available_move);
                 }
@@ -584,7 +583,7 @@ impl BoardState {
 
         pruned_list
     }
-    pub fn get_square_team(&self, square_idx: usize) -> Option<Team> {
+    pub fn get_square_team(&self, square_idx: usize) -> Team {
         let white_check = self.get_team_coverage(Team::White);
         let black_check = self.get_team_coverage(Team::Black);
 
@@ -606,32 +605,30 @@ impl BoardState {
                     .then(|| Team::Black);
 
                 if let Some(_bbc) = black_bitcheck {
-                    black_bitcheck
+                    return Team::Black
                 } else {
                     // There is not a piece here.
-                    None
+                    return Team::None
                 }
-            } else {
-                white_bitcheck
+            } else {    
+                return Team::White
             }
         }
+        return Team::None
     }
     pub fn make_move(&mut self, r#move: Move) -> Result<(), MoveError> {
         // Update out of the target positions
         let moving_piece_type = self.piece_list[r#move.start];
-        let square_team_opt = self.get_square_team(r#move.start);
-        let target_team_opt = self.get_square_team(r#move.target);
+        let square_team = self.get_square_team(r#move.start);
+        let target_team = self.get_square_team(r#move.target);
 
         if r#move.start == r#move.target {
             return Err(MoveError::NotAMove);
         }
-        if square_team_opt.is_none() {
-            return Err(MoveError::NoUnit);
-        }
-        if target_team_opt == square_team_opt {
+        if target_team == square_team {
             return Err(MoveError::AttackedAlly);
         }
-        if let Some(square_team) = square_team_opt {
+        if square_team != Team::None {
             tracing::debug!("{square_team:?} {moving_piece_type:?} {move:?}");
 
             self.move_piece(square_team, moving_piece_type, r#move);
@@ -702,6 +699,8 @@ impl BoardState {
             } else {
                 self.active_team = Team::Black // TODO: Account for three turn order with red before white
             }
+        } else {
+            return Err(MoveError::NoUnit);
         }
 
         Ok(())
@@ -726,7 +725,7 @@ impl BoardState {
 
         if target_piece_type != PieceType::None {
             Some(Piece {
-                team: self.get_square_team(pos).unwrap_or(Team::None),
+                team: self.get_square_team(pos),
                 position: pos,
                 piece_type: target_piece_type,
             })

@@ -243,8 +243,7 @@ impl MainState {
 
                         let board_team = self
                             .board
-                            .get_square_team(selected_square)
-                            .unwrap_or(Team::None);
+                            .get_square_team(selected_square);
                         if status_on_bitboard.unwrap().then_some(true).is_some()
                             && self.player_team == board_team
                         {
@@ -347,9 +346,9 @@ impl MainState {
             for file in 0..8 {
                 let square_bit_idx = 63 - ((rank * 8) + (7 - file)) as usize;
 
-                let square_team_opt = self.board.get_square_team(square_bit_idx);
-
-                if let Some(square_team) = square_team_opt {
+                let square_team = self.board.get_square_team(square_bit_idx);
+                
+                if square_team != Team::None {
                     // We use the team id to compose the team part of the file name
                     let file_team =
                         String::from(if square_team == Team::White { "w" } else { "b" });
@@ -516,8 +515,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             if let Some(selected_square) = self.selected_square {
                 let ss_team = self
                     .board
-                    .get_square_team(selected_square)
-                    .unwrap_or(Team::None);
+                    .get_square_team(selected_square);
 
                 if let Some(pl_moves) = &self.board_legal_moves {
                     self.queued_move = if self.player_team == self.board.active_team
@@ -550,7 +548,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             }
             if let Ok(()) = self.board.make_move(c_move) {
                 let moving_piece_type = self.board.piece_list[c_move.target];
-                let moving_piece_team = self.board.get_square_team(c_move.target).unwrap_or(Team::None);
+                let moving_piece_team = self.board.get_square_team(c_move.target);
                 self.play_sound(ctx, "piece_move", 0.1)?;
                 self.last_move_origin = Some(c_move.start);
                 self.last_move_end = Some(c_move.target);
