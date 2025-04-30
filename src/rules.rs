@@ -89,7 +89,7 @@ mod tests {
             test_board.capture_bitboard[Team::Black as usize]
                 .state
                 .view_bits::<Lsb0>()
-                .get(24)
+                .get(26)
                 .expect("Piece Bitboard did not extend to 25 bits")
                 .then_some(1),
             None,

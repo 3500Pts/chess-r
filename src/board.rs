@@ -370,7 +370,8 @@ impl BoardState {
         self.piece_list[r#move.target] = moving_piece_type;
     }
     fn update_capture_bitboards(&mut self) {
-        for team_id in 0..Team::Black as usize {
+   
+        for team_id in 0..=Team::Black as usize {
             let mut capture_bitboard = Bitboard::default();
             let legals = self.get_psuedolegal_moves();
 
