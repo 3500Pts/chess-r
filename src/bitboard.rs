@@ -129,18 +129,32 @@ impl Bitboard {
 
         let split: Vec<char> = notation.chars().collect();
 
-        let rank = list.iter().position(|n| *n == split[0].to_string());
+        let file = list.iter().position(|n| *n == split[0].to_string());
 
-        if let Some(rank_id) = rank {
-            let file = split[1].to_digit(10);
-            if let Some(file_id) = file {
-                let result = (rank_id * 8) + (file_id as usize);
-                Some(result)
+        if let Some(file_id) = file {
+            let rank = split[1].to_digit(10);
+            if let Some(rank_id) = rank {
+                let result = (rank_id * 8) + file_id as u32;
+                Some(result as usize)
             } else {
                 None
             }
         } else {
             None
         }
+    }
+
+    pub fn bit_idx_to_al_notation(bit: usize) -> Option<String> {
+        let list = ["a", "b", "c", "d", "e", "f", "g", "h"];
+
+        if !(0..64).contains(&bit) {
+            return None;
+        }
+        let rank_num = bit.div_floor(8);
+        let file_num = bit % 8;
+
+        let rank_str = list[rank_num];
+        
+        Some(format!("{}{}", rank_str, file_num + 1))
     }
 }
