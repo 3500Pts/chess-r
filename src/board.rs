@@ -512,7 +512,13 @@ impl BoardState {
     pub fn dump_positions(&self) {
         for (square, _) in self.piece_list.iter().enumerate() {
             if let Some(piece) = self.get_piece_at_pos(square) {
-                println!("{:?} {:?} @ {:?} ({})", piece.team, piece.piece_type, Bitboard::bit_idx_to_al_notation(square), square)
+                println!(
+                    "{:?} {:?} @ {:?} ({})",
+                    piece.team,
+                    piece.piece_type,
+                    Bitboard::bit_idx_to_al_notation(square),
+                    square
+                )
             }
         }
     }
@@ -787,7 +793,7 @@ impl BoardState {
                     piece_placement.push(piece_char)
                 }
             }
-            
+
             rank += 1;
             if empty_square_head != 0 {
                 // Append empty squares if there is nothing here
@@ -804,7 +810,7 @@ impl BoardState {
         )
     }
     pub fn unmake_move(&mut self, r#move: Move) -> Result<(), MoveError> {
-        let moving_piece_type = self.piece_list[r#move.start];
+        let moving_piece_type = self.piece_list[r#move.target];
         let square_team = self.get_square_team(r#move.target);
         let target_team = self.get_square_team(r#move.start);
 
@@ -815,6 +821,8 @@ impl BoardState {
             if target_team == square_team {
                 return Err(MoveError::AttackedAlly);
             }
+
+
             self.move_piece(
                 square_team,
                 moving_piece_type,
@@ -826,7 +834,7 @@ impl BoardState {
                     is_castle: false,
                 },
             );
-
+            
             if let Some(fallen_piece) = r#move.captures {
                 self.piece_list[r#move.target] = fallen_piece.piece_type;
                 self.board_pieces[fallen_piece.team as usize][fallen_piece.piece_type as usize]
@@ -834,7 +842,6 @@ impl BoardState {
                     .view_bits_mut::<Lsb0>()
                     .set(r#move.target, true);
             }
-
             if r#move.is_castle {
                 let is_queenside = r#move.target < r#move.start;
                 let is_kingside = r#move.target > r#move.start;
@@ -848,7 +855,56 @@ impl BoardState {
                         .view_bits_mut::<Lsb0>()
                         .set(rights_index + 1, true);
                 }
+
+                // Unmove rooks
+
+                if r#move.is_castle && r#move.target == 6 {
+                    // Rook to a5
+                    self.move_piece(square_team, PieceType::Rook, {
+                        Move {
+                            start: 5,
+                            target: 7,
+                            captures: None,
+                            is_pawn_double: false,
+                            is_castle: true,
+                        }
+                    });
+                } else if r#move.is_castle && r#move.target == 2 {
+                    // Rook to a3
+                    self.move_piece(square_team, PieceType::Rook, {
+                        Move {
+                            start: 3,
+                            target: 0,
+                            captures: None,
+                            is_pawn_double: false,
+                            is_castle: true,
+                        }
+                    });
+                } else if r#move.is_castle && r#move.target == 58 {
+                    // Rook to a3
+                    self.move_piece(square_team, PieceType::Rook, {
+                        Move {
+                            start: 59,
+                            target: 56,
+                            captures: None,
+                            is_pawn_double: false,
+                            is_castle: true,
+                        }
+                    });
+                } else if r#move.is_castle && r#move.target == 62 {
+                    // Rook to a3
+                    self.move_piece(square_team, PieceType::Rook, {
+                        Move {
+                            start: 61,
+                            target: 63,
+                            captures: None,
+                            is_pawn_double: false,
+                            is_castle: true,
+                        }
+                    });
+                }
             }
+
             if self.active_team == Team::Black {
                 self.active_team = Team::White;
             } else {
