@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use bitvec::{order::Lsb0, view::BitView};
 
 use crate::{
@@ -26,6 +28,19 @@ impl Move {
         clone.start = pos;
         clone
     }
+}
+impl Display for Move {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(alno) = Bitboard::bit_idx_to_al_notation(self.start) {
+            f.write_str(&alno)?;
+            f.write_str("->")?;
+        }
+        if let Some(alno) = Bitboard::bit_idx_to_al_notation(self.target) {
+            f.write_str(&alno)?;
+        }
+        Ok(())
+    }
+    
 }
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum MoveError {
