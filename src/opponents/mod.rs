@@ -76,10 +76,10 @@ fn evaluate_move(
     eval_score += evaluate(virtual_board, legals_all);
 
     if ava_move.is_castle {
-        eval_score += 580 * who_to_play
+        eval_score += 580
     }
 
-    let mut jiggle = rand::rng().random_range(-30..30);
+    let mut jiggle = rand::rng().random_range(-10..10);
 
     if virtual_board.ply_clock > 6 {
         jiggle = rand::rng().random_range(-70..70);
@@ -89,7 +89,7 @@ fn evaluate_move(
     }
 
     if virtual_board.active_team == Team::White {
-        let mut max = i32::MIN;
+        let mut max = 0;//i32::MIN;
 
         for legal_move in legals {
             let move_score = evaluate_move(
@@ -100,7 +100,7 @@ fn evaluate_move(
                 best_black,
             );
 
-            max = max.max(move_score);
+            max = max+move_score;// max.min(move_score);
             best_white = best_white.max(move_score);
 
             if best_white >= best_black {
@@ -109,7 +109,7 @@ fn evaluate_move(
         }
         max
     } else {
-        let mut min = i32::MAX;
+        let mut min = 0;// i32::MAX;
         for legal_move in legals {
             let move_score = evaluate_move(
                 &mut virtual_board.clone(),
@@ -118,7 +118,7 @@ fn evaluate_move(
                 best_white,
                 best_black,
             );
-            min = min.min(move_score);
+            min = min + move_score;// min.min(move_score);
             best_black = best_black.min(move_score);
 
             if best_white <= best_black {
@@ -211,6 +211,7 @@ impl MoveComputer for ChessOpponent {
                         // Preset the AB pruning with the eval we already have
                         let (mut best_white, mut best_black) = (i32::MIN, i32::MAX);
 
+                        /* 
                         if let Some(cb) = current_best {
                             if board.active_team == Team::White {
                                 best_white = cb.eval;
@@ -225,7 +226,7 @@ impl MoveComputer for ChessOpponent {
                             } else if board.active_team == Team::Black {
                                 best_black = cb.eval;
                             }
-                        }
+                        }*/
                         let eval = evaluate_move(
                             &mut board.clone(),
                             *legal_move,
