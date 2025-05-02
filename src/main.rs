@@ -2,6 +2,7 @@
 #![feature(try_find)]
 #![feature(mpmc_channel)]
 #![feature(string_remove_matches)]
+#![feature(iter_array_chunks)]
 //#![windows_subsystem = "windows"]
 
 pub mod bitboard;

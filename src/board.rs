@@ -757,44 +757,46 @@ impl BoardState {
 
         let mut empty_square_head = 0; // Add to this for every empty square, reset on every filled square
 
+        let mut rank = 0;
         // Write pieces
-        for (square, piece_type) in self.piece_list.iter().enumerate().rev() {
-            let team = self.get_square_team(square);
+        for rank_of_pieces in self.piece_list.iter().enumerate().rev().array_chunks::<8>() {
+            for (square, piece_type) in rank_of_pieces.iter().rev() {
+                let team = self.get_square_team(*square);
 
-            let mut piece_char = match piece_type {
-                PieceType::None => '0',
-                PieceType::Pawn => 'p',
-                PieceType::Rook => 'r',
-                PieceType::Bishop => 'b',
-                PieceType::Knight => 'n',
-                PieceType::Queen => 'q',
-                PieceType::King => 'k',
-            };
+                let mut piece_char = match *piece_type {
+                    &PieceType::None => '0',
+                    &PieceType::Pawn => 'p',
+                    &PieceType::Rook => 'r',
+                    &PieceType::Bishop => 'b',
+                    &PieceType::Knight => 'n',
+                    &PieceType::Queen => 'q',
+                    &PieceType::King => 'k',
+                };
 
-            if team == Team::White {
-                piece_char = piece_char.to_ascii_uppercase()
+                if team == Team::White {
+                    piece_char = piece_char.to_ascii_uppercase()
+                }
+                if *piece_type == &PieceType::None || team == Team::None {
+                    empty_square_head += 1;
+                } else {
+                    if empty_square_head != 0 {
+                        // Append empty squares
+                        piece_placement.push_str(&(empty_square_head).to_string())
+                    }
+                    empty_square_head = 0;
+                    piece_placement.push(piece_char)
+                }
             }
-            if piece_type == &PieceType::None || team == Team::None {
-                empty_square_head += 1;
-            } else {
-                if empty_square_head != 0 {
-                    // Append empty squares
-                    piece_placement.push_str(&(empty_square_head).to_string())
-                }
-                empty_square_head = 0;
-                piece_placement.push(piece_char)
+            
+            rank += 1;
+            if empty_square_head != 0 {
+                // Append empty squares if there is nothing here
+                piece_placement.push_str(&(empty_square_head).to_string())
             }
-
-            if square % 8 == 0 {
-                if empty_square_head != 0 {
-                    // Append empty squares if there is nothing here
-                    piece_placement.push_str(&(empty_square_head).to_string())
-                }
-                empty_square_head = 0;
-                if square != 64 {
-                    // Append a splitter
-                    piece_placement.push('/')
-                }
+            empty_square_head = 0;
+            if rank != 8 {
+                // Append a splitter
+                piece_placement.push('/')
             }
         }
         format!(

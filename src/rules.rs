@@ -143,7 +143,14 @@ mod tests {
         assert_eq!(Bitboard::bit_idx_to_al_notation(37), Some(String::from("f5")), "Bit index to al notation returned incorrectly");
         assert_eq!(Bitboard::al_notation_to_bit_idx("f5"), Some(37), "Algorithmic notation to bit index returned incorrectly");
     }
+    #[test]
+    fn fen() {
+        let fen = String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
+        let test_board = BoardState::from_fen(fen.clone()).expect("Invalid FEN string used");
+
+        assert_eq!(fen, test_board.as_fen(), "Fen conversion failed")
+    }
     #[test]
     fn unmake_move() {
         let mut start_board = BoardState::from_fen(String::from(
