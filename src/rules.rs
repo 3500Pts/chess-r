@@ -122,13 +122,44 @@ mod tests {
         assert_eq!(ept, None, "Castled while in check");
     }
 
-      // Check
-      #[test]
-      fn check() {
+    // Check
+    #[test]
+    fn check() {
         let test_board = BoardState::from_fen(String::from(
             "rnb1kbnr/ppp2ppp/8/3p4/3pP3/3B1N2/PPP2qPP/RNBQK2R w KQkq - 0 1",
         ))
         .expect("Invalid FEN used in testing");
-        assert_eq!(test_board.is_team_checked(Team::White), true, "Castled while in check");
+        assert_eq!(
+            test_board.is_team_checked(Team::White),
+            true,
+            "Check doesn't work"
+        );
+    }
+
+    #[test]
+    fn unmake_move() {
+        let mut start_board = BoardState::from_fen(String::from(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        )).expect("Invalid FEN used in testing");
+
+        let compare_board = start_board.clone();
+
+        let move_to_reverse = Move {
+            start: 11,
+            target: 19,
+            captures: None, 
+            is_pawn_double: false,
+            is_castle: false,
+        };
+
+        start_board.make_move(move_to_reverse).unwrap();
+        println!("{start_board:?}");
+        start_board.unmake_move(move_to_reverse).unwrap();
+        println!("{start_board:?}, {compare_board:?}");
+        assert_eq!(
+            start_board,
+            compare_board,
+            "Unmaking one move created a different board state than the initial board"
+        );
     }
 }
