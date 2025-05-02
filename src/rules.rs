@@ -147,26 +147,26 @@ mod tests {
     #[test]
     fn unmake_move() {
         let mut start_board = BoardState::from_fen(String::from(
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "8/7p/8/5r2/P3K2k/1P4p1/2P5/8 w - - 0 40",
         )).expect("Invalid FEN used in testing");
 
         let compare_board = start_board.clone();
 
         let move_to_reverse = Move {
-            start: 11,
-            target: 19,
-            captures: None, 
+            start: Bitboard::al_notation_to_bit_idx("e4").unwrap(),
+            target: Bitboard::al_notation_to_bit_idx("f5").unwrap(),
+            captures: start_board.get_piece_at_pos(Bitboard::al_notation_to_bit_idx("f5").unwrap()), 
             is_pawn_double: false,
             is_castle: false,
         };
 
+        start_board.dump_positions();
         start_board.make_move(move_to_reverse).unwrap();
-        println!("{start_board:?}");
+        println!("{} COMP {}", start_board.as_fen(), compare_board.as_fen());
         start_board.unmake_move(move_to_reverse).unwrap();
-        println!("{start_board:?}, {compare_board:?}");
         assert_eq!(
-            start_board,
-            compare_board,
+            start_board.as_fen(),
+            compare_board.as_fen(),
             "Unmaking one move created a different board state than the initial board"
         );
     }
