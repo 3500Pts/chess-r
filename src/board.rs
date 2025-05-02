@@ -2,7 +2,7 @@ use bitvec::{order::Lsb0, view::BitView};
 
 use crate::{
     bitboard::*,
-    r#move::{Move, MoveError, Piece, *},
+    r#move::{self, Move, MoveError, Piece, *},
 };
 use std::{
     collections::HashMap,
@@ -62,7 +62,7 @@ impl fmt::Display for FENErr {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct BoardState {
     pub board_pieces: [[Bitboard; 7]; 3],
     pub castling_rights: u8, // Using queen, king, and each side as booleans, there are 4 bits of castling rights that can be expressed as a number
@@ -621,10 +621,10 @@ impl BoardState {
         if r#move.start == r#move.target {
             return Err(MoveError::NotAMove);
         }
-        if target_team == square_team {
-            return Err(MoveError::AttackedAlly);
-        }
         if square_team != Team::None {
+            if target_team == square_team {
+                return Err(MoveError::AttackedAlly);
+            }
             tracing::debug!("{square_team:?} {moving_piece_type:?} {move:?}");
 
             self.move_piece(square_team, moving_piece_type, r#move);
@@ -692,9 +692,103 @@ impl BoardState {
             if self.active_team == Team::Black {
                 self.active_team = Team::White;
                 self.turn_clock += 1;
+                self.en_passant_square = None;
             } else {
                 self.active_team = Team::Black // TODO: Account for three turn order with red before white
             }
+            self.ply_clock += 1;
+        } else {
+            return Err(MoveError::NoUnit);
+        }
+
+        Ok(())
+    }
+    pub fn as_fen(&self) -> String {
+        let mut castling_rights = String::from(if self.castling_rights > 0 { "" } else { "-" });
+        let en_passant_square = {
+            if let Some(eps) = self.en_passant_square {
+                if let Some(eps_str) = Bitboard::bit_idx_to_al_notation(eps) {
+                    eps_str
+                } else {
+                    String::from("-")
+                }
+            } else {
+                String::from("-")
+            }
+        };
+        let half_move_clock = "0"; // TODO 
+        let full_move_clock = self.turn_clock;
+        let active_color = if self.active_team == Team::White {
+            "w"
+        } else {
+            "b"
+        };
+        let mut piece_placement = String::default();
+
+        for castling_move in 0..4 {
+            let castling_rights_bits = self.castling_rights.view_bits::<Lsb0>();
+
+            if castling_rights_bits
+                .get(castling_move)
+                .expect("Attempted to access out-of-bounds castling bit")
+                .then_some("k")
+                .is_some()
+            {
+                let mut additional_string = if castling_move % 2 == 0 { 'k' } else { 'q' };
+                if castling_move < 2 {
+                    additional_string = additional_string.to_ascii_uppercase()
+                }
+
+                castling_rights.push(additional_string);
+            }
+        }
+
+        let mut empty_square_head = 0; // Add to this for every empty square, reset on every filled square
+
+        // Write pieces
+        for (square, piece_type) in self.piece_list.iter().enumerate().rev() {
+            let team = self.get_square_team(square);
+
+            let mut piece_char = match piece_type {
+                PieceType::None => '0',
+                PieceType::Pawn => 'p',
+                PieceType::Rook => 'r',
+                PieceType::Bishop => 'b',
+                PieceType::Knight => 'n',
+                PieceType::Queen => 'q',
+                PieceType::King => 'k',
+            };
+
+            if team == Team::White {
+                piece_char = piece_char.to_ascii_uppercase()
+            }
+            if piece_type == &PieceType::None || team == Team::None {
+                empty_square_head += 1;
+            } else {
+                if empty_square_head != 0 {
+                    // Append empty squares
+                    piece_placement.push_str(&(empty_square_head).to_string())
+                }
+                empty_square_head = 0;
+                piece_placement.push(piece_char)
+            }
+
+            if square % 8 == 0 {
+                if empty_square_head != 0 {
+                    // Append empty squares if there is nothing here
+                    piece_placement.push_str(&(empty_square_head).to_string())
+                }
+                empty_square_head = 0;
+                if square != 64 {
+                    // Append a splitter
+                    piece_placement.push('/')
+                }
+            }
+        }
+        format!(
+            "{piece_placement} {active_color} {castling_rights} {en_passant_square} {half_move_clock} {full_move_clock}"
+        )
+    }
         } else {
             return Err(MoveError::NoUnit);
         }
