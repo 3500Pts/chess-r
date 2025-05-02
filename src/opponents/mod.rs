@@ -60,9 +60,17 @@ fn pick_random_move(board: BoardState) -> Option<Move> {
     legals.choose(&mut rand::rng()).copied()
 }
 
-fn handle_move_result(result_type: &str, result: Result<(), MoveError>, ava_move: Move, search_budget: i32, virtual_board: &BoardState) {
+fn handle_move_result(
+    result_type: &str,
+    result: Result<(), MoveError>,
+    ava_move: Move,
+    search_budget: i32,
+    virtual_board: &BoardState,
+) {
     if let Err(vm_err) = result {
-        tracing::info!("RECURSIVE {result_type} at search budget {search_budget}: {vm_err:?}; MOVE: {ava_move}");
+        tracing::info!(
+            "RECURSIVE {result_type} at search budget {search_budget}: {vm_err:?}; MOVE: {ava_move}"
+        );
         BoardState::render_piece_list(virtual_board.piece_list.to_vec());
         tracing::info!("{}", virtual_board.get_team_coverage(Team::White))
     }
@@ -75,7 +83,7 @@ fn evaluate_move(
     mut best_black: i32,
 ) -> i32 {
     // SUPER EXPENSIVE to recurse over it
-    let virtual_board =  board;
+    let virtual_board = board;
     let who_to_play = if virtual_board.active_team == Team::White {
         1
     } else {
@@ -86,8 +94,13 @@ fn evaluate_move(
 
     let mut eval_score = 0;
 
-
-    handle_move_result("MOVE", virtual_board.make_move(ava_move), ava_move, search_budget, virtual_board);
+    handle_move_result(
+        "MOVE",
+        virtual_board.make_move(ava_move),
+        ava_move,
+        search_budget,
+        virtual_board,
+    );
     let legals_all = virtual_board.get_legal_moves();
     let legals = virtual_board
         .prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
@@ -112,7 +125,13 @@ fn evaluate_move(
         jiggle = rand::rng().random_range(-70..70);
     }
     if search_budget == 0 {
-        handle_move_result("UNMOVE", virtual_board.unmake_move(ava_move), ava_move, search_budget, virtual_board);
+        handle_move_result(
+            "UNMOVE",
+            virtual_board.unmake_move(ava_move),
+            ava_move,
+            search_budget,
+            virtual_board,
+        );
         return eval_score + jiggle;
     }
 
@@ -134,7 +153,13 @@ fn evaluate_move(
                 break;
             }
         }
-        handle_move_result("UNMOVE", virtual_board.unmake_move(ava_move), ava_move, search_budget, virtual_board);
+        handle_move_result(
+            "UNMOVE",
+            virtual_board.unmake_move(ava_move),
+            ava_move,
+            search_budget,
+            virtual_board,
+        );
         max
     } else {
         let mut min = i32::MAX;
@@ -153,10 +178,15 @@ fn evaluate_move(
                 break;
             }
         }
-        handle_move_result("UNMOVE", virtual_board.unmake_move(ava_move), ava_move, search_budget, virtual_board);
+        handle_move_result(
+            "UNMOVE",
+            virtual_board.unmake_move(ava_move),
+            ava_move,
+            search_budget,
+            virtual_board,
+        );
         min
     }
-
 }
 fn evaluate_team(board: &BoardState, team: Team, available_moves: Vec<Move>) -> i32 {
     let mut material = 0;
@@ -216,12 +246,12 @@ impl MoveComputer for ChessOpponent {
                     return Some(legals[0]);
                 }
                 let mut search_budget = 0;
+                let mut mapped_legals = EvaluationList(Vec::new());
                 loop {
-                    let mut mapped_legals: EvaluationList = EvaluationList(Vec::new());
+                    let mut evals: EvaluationList = EvaluationList(Vec::new());
 
                     let mut will_break = false;
                     // Check the current best first
-
                     legals.sort_by(|c_a, c_b| {
                         if let Some(cb) = current_best {
                             if cb.legal_move == *c_a && cb.legal_move != *c_b {
@@ -234,32 +264,14 @@ impl MoveComputer for ChessOpponent {
                         }
                     });
                     'legal_check: for legal_move in &legals {
+                        // Preset the AB pruning with the eval we already have
+                        let (best_white, best_black) = (i32::MIN, i32::MAX);
                         if Instant::now().duration_since(start_time) > *time_limit {
                             will_break = true;
-                            break 'legal_check;
                         };
 
-                        // Preset the AB pruning with the eval we already have
-                        let (mut best_white, mut best_black) = (i32::MIN, i32::MAX);
-
-                        /* 
-                        if let Some(cb) = current_best {
-                            if board.active_team == Team::White {
-                                best_white = cb.eval;
-                            } else if board.active_team == Team::Black {
-                                best_black = -cb.eval;
-                            }
-                        }
-
-                        if let Some(cb) = current_worst {
-                            if board.active_team == Team::White {
-                                best_white = -cb.eval;
-                            } else if board.active_team == Team::Black {
-                                best_black = cb.eval;
-                            }
-                        }*/
                         let eval = evaluate_move(
-                            &mut board.clone(),
+                            &mut board,
                             *legal_move,
                             search_budget - 1,
                             best_white,
@@ -269,47 +281,49 @@ impl MoveComputer for ChessOpponent {
                         } else {
                             -1
                         };
-                        mapped_legals.0.push(NegamaxEval {
+
+                        evals.0.push(NegamaxEval {
                             eval,
                             legal_move: *legal_move,
                         })
                     }
-
-                    mapped_legals.0.sort_by(|a, b| b.eval.cmp(&a.eval));
-                    if !mapped_legals.0.is_empty() {
-                        if let Some(current_best_move) = current_best {
-                            current_best = if current_best_move.eval < mapped_legals.0[0].eval {
-                                Some(mapped_legals.0[0])
-                            } else {
-                                current_best
-                            };
-                        } else {
-                            current_best = Some(mapped_legals.0[0]);
-                        }
-
-                        if let Some(current_worst_move) = current_worst {
-                            current_worst =
-                                if current_worst_move.eval > mapped_legals.0.last().unwrap().eval {
-                                    mapped_legals.0.last().copied()
-                                } else {
-                                    current_best
-                                };
-                        } else {
-                            current_worst = mapped_legals.0.last().copied();
-                        }
-
-                        tracing::warn!(
-                            "\n Best move ply {search_budget}: {:?}",
-                            mapped_legals.0[0].eval
-                        );
-                        tracing::warn!("Mapped legals ply {search_budget}: {}", mapped_legals);
-                    } else if let Some(current_best_move) = current_best {
-                        mapped_legals.0.push(current_best_move);
-                    }
                     if will_break {
                         break;
                     };
+                    mapped_legals = evals;
                     search_budget += 1;
+                }
+
+                mapped_legals.0.sort_by(|a, b| b.eval.cmp(&a.eval));
+                if !mapped_legals.0.is_empty() {
+                    if let Some(current_best_move) = current_best {
+                        current_best = if current_best_move.eval < mapped_legals.0[0].eval {
+                            Some(mapped_legals.0[0])
+                        } else {
+                            current_best
+                        };
+                    } else {
+                        current_best = Some(mapped_legals.0[0]);
+                    }
+
+                    /*if let Some(current_worst_move) = current_worst {
+                        current_worst =
+                            if current_worst_move.eval > mapped_legals.0.last().unwrap().eval {
+                                mapped_legals.0.last().copied()
+                            } else {
+                                current_best
+                            };
+                    } else {
+                        current_worst = mapped_legals.0.last().copied();
+                    }*/
+
+                    tracing::warn!(
+                        "\n Best move ply {search_budget}: {:?}",
+                        mapped_legals.0[0].eval
+                    );
+                    tracing::warn!("Mapped legals ply {search_budget}: {}", mapped_legals);
+                } else if let Some(current_best_move) = current_best {
+                    mapped_legals.0.push(current_best_move);
                 }
 
                 if current_best.is_some() {
@@ -337,8 +351,8 @@ impl MoveComputer for ChessOpponent {
                         &mut board.clone(),
                         legal_move,
                         *search_budget - 1,
-                        &mut best_white,
-                        &mut best_black,
+                        best_white,
+                        best_black,
                     ) * if board.active_team == Team::White {
                         1
                     } else {
