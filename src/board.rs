@@ -370,14 +370,12 @@ impl BoardState {
         self.piece_list[r#move.target] = moving_piece_type;
     }
     fn update_capture_bitboards(&mut self) {
-   
         for team_id in 0..=Team::Black as usize {
             let mut capture_bitboard = Bitboard::default();
             let legals = self.get_psuedolegal_moves();
 
             for (square, (bitboard, _legal_moves)) in legals.iter().enumerate().take(64) {
                 if self.get_square_team(square) as usize == team_id {
-                  //  println!("{} {}", capture_bitboard, bitboard);
                     capture_bitboard |= *bitboard
                 }
             }
@@ -503,6 +501,13 @@ impl BoardState {
         }
 
         move_list
+    }
+    pub fn dump_positions(&self) {
+        for (square, _) in self.piece_list.iter().enumerate() {
+            if let Some(piece) = self.get_piece_at_pos(square) {
+                println!("{:?} {:?} @ {:?} ({})", piece.team, piece.piece_type, Bitboard::bit_idx_to_al_notation(square), square)
+            }
+        }
     }
     pub fn is_team_checked(&self, team: Team) -> bool {
         let enemy_capture_bitboard = self.capture_bitboard[Team::White as usize]
