@@ -273,7 +273,7 @@ impl MoveComputer for ChessOpponent {
                         let eval = evaluate_move(
                             &mut board,
                             *legal_move,
-                            search_budget - 1,
+                            search_budget,
                             best_white,
                             best_black,
                         ) * if board.active_team == Team::White {
