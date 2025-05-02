@@ -12,7 +12,7 @@ use rand::{Rng, seq::IndexedRandom};
 use crate::{
     bitboard::{Bitboard, PieceType, Team},
     board::BoardState,
-    r#move::Move,
+    r#move::{Move, MoveError},
 };
 
 const SCORES: [(PieceType, i32); 7] = [
@@ -42,6 +42,13 @@ fn pick_random_move(board: BoardState) -> Option<Move> {
     legals.choose(&mut rand::rng()).copied()
 }
 
+fn handle_move_result(result_type: &str, result: Result<(), MoveError>, ava_move: Move, search_budget: i32, virtual_board: &BoardState) {
+    if let Err(vm_err) = result {
+        tracing::info!("RECURSIVE {result_type} at search budget {search_budget}: {vm_err:?}; MOVE: {ava_move}");
+        BoardState::render_piece_list(virtual_board.piece_list.to_vec());
+        tracing::info!("{}", virtual_board.get_team_coverage(Team::White))
+    }
+}
 fn evaluate_move(
     board: &mut BoardState,
     ava_move: Move,
@@ -50,7 +57,7 @@ fn evaluate_move(
     mut best_black: i32,
 ) -> i32 {
     // SUPER EXPENSIVE to recurse over it
-    let virtual_board = &mut board.clone();
+    let virtual_board =  board;
     let who_to_play = if virtual_board.active_team == Team::White {
         1
     } else {
@@ -68,7 +75,7 @@ fn evaluate_move(
         eval_score -= SCORES[score_pt.unwrap()].1 * who_to_play;
     }
 
-    let _ = virtual_board.make_move(ava_move);
+    handle_move_result("MOVE", virtual_board.make_move(ava_move), ava_move, search_budget, virtual_board);
     let legals_all = virtual_board.get_legal_moves();
     let legals = virtual_board
         .prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
@@ -85,48 +92,51 @@ fn evaluate_move(
         jiggle = rand::rng().random_range(-70..70);
     }
     if search_budget == 0 {
-        return eval_score + jiggle;
+        handle_move_result("UNMOVE", virtual_board.unmake_move(ava_move), ava_move, search_budget, virtual_board);
+        return eval_score;
     }
 
     if virtual_board.active_team == Team::White {
-        let mut max = 0;//i32::MIN;
+        let mut max = i32::MIN;
 
         for legal_move in legals {
             let move_score = evaluate_move(
-                &mut virtual_board.clone(),
+                virtual_board,
                 legal_move,
                 search_budget - 1,
                 best_white,
                 best_black,
             );
-
-            max = max+move_score;// max.min(move_score);
+            max = max.max(move_score);
             best_white = best_white.max(move_score);
 
-            if best_white >= best_black {
+            if max <= best_black {
                 break;
             }
         }
+        handle_move_result("UNMOVE", virtual_board.unmake_move(ava_move), ava_move, search_budget, virtual_board);
         max
     } else {
-        let mut min = 0;// i32::MAX;
+        let mut min = i32::MAX;
         for legal_move in legals {
             let move_score = evaluate_move(
-                &mut virtual_board.clone(),
+                virtual_board,
                 legal_move,
                 search_budget - 1,
                 best_white,
                 best_black,
             );
-            min = min + move_score;// min.min(move_score);
+            min = min.min(move_score);
             best_black = best_black.min(move_score);
 
-            if best_white <= best_black {
+            if min >= best_white {
                 break;
             }
         }
+        handle_move_result("UNMOVE", virtual_board.unmake_move(ava_move), ava_move, search_budget, virtual_board);
         min
     }
+
 }
 fn evaluate_team(board: &BoardState, team: Team, available_moves: Vec<Move>) -> i32 {
     let mut material = 0;
@@ -238,7 +248,6 @@ impl MoveComputer for ChessOpponent {
                         } else {
                             -1
                         };
-
                         mapped_legals.push(NegamaxEval {
                             eval,
                             legal_move: *legal_move,
