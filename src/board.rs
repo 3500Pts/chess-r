@@ -346,22 +346,28 @@ impl BoardState {
         // Update castling rights
         if r#move.start == 56 || r#move.target == 56 {
             // Black queenside rook
+            tracing::debug!("Lost queenside castling (black) through rook movement");
             self.castling_rights.view_bits_mut::<Lsb0>().set(3, false);
         } else if r#move.start == 0 || r#move.target == 0 {
             // White queenside rook
+            tracing::debug!("Lost queenside castling (white) through rook movement");
             self.castling_rights.view_bits_mut::<Lsb0>().set(1, false);
         } else if r#move.start == 7 || r#move.target == 7 {
             // White kingside rook
+            tracing::debug!("Lost kingside castling (white) through rook movement");
             self.castling_rights.view_bits_mut::<Lsb0>().set(0, false);
         } else if r#move.start == 63 || r#move.target == 63 {
             // Black kingside rook
+            tracing::debug!("Lost kingside castling (black) through rook movement");
             self.castling_rights.view_bits_mut::<Lsb0>().set(2, false);
         } else if r#move.start == 4 || r#move.target == 4 {
             // Black king
+            tracing::debug!("Lost castling (black) through king movement");
             self.castling_rights.view_bits_mut::<Lsb0>().set(2, false);
             self.castling_rights.view_bits_mut::<Lsb0>().set(3, false);
         } else if r#move.start == 60 || r#move.target == 60 {
             // White king
+            tracing::debug!("Lost castling (black) through king movement");
             self.castling_rights.view_bits_mut::<Lsb0>().set(0, false);
             self.castling_rights.view_bits_mut::<Lsb0>().set(1, false);
         }

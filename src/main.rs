@@ -39,7 +39,7 @@ async fn main() {
         .from_env()
         .expect("Failed to build envfilter")
         .add_directive(
-            "chess_r=info"
+            "chess_r=warn"
                 .parse()
                 .expect("Failed to parse tracing directive"),
         );

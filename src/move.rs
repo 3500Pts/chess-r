@@ -14,7 +14,7 @@ pub struct Piece {
     pub position: usize,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Move {
     pub start: usize,
     pub target: usize,
@@ -39,6 +39,18 @@ impl Display for Move {
             f.write_str(&alno)?;
         }
         Ok(())
+    }
+    
+}
+impl Default for Move {
+    fn default() -> Self {
+        Move {
+            start: 0,
+            target: 0,
+            captures: None, 
+            is_pawn_double: false,
+            is_castle: false
+        }
     }
     
 }
