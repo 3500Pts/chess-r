@@ -570,6 +570,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 self.last_move_end = Some(c_move.target);
                 // Regenerate moves
                 self.board_legal_moves = Some(self.board.get_legal_moves());
+                let team_legal_moves_active = self.board.prune_moves_for_team(self.board_legal_moves.clone().unwrap(), self.board.active_team);
+
                 self.move_history.push(MoveHistoryEntry {
                     piece_type: moving_piece_type,
                     team: moving_piece_team,
