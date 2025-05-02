@@ -450,14 +450,21 @@ impl BoardState {
 
         // Add castling
         // K, Q, k q
+        let white_check = self.is_team_checked(Team::White);
+        let black_check = self.is_team_checked(Team::Black);
+
         for castling_move in 0..4 {
             let castling_rights_bits = self.castling_rights.view_bits::<Lsb0>();
-
             if castling_rights_bits
                 .get(castling_move)
                 .expect("Attempted to access out-of-bounds castling bit")
                 .then_some(1)
                 .is_some()
+                && if castling_move < 2 {
+                    white_check
+                } else {
+                    black_check
+                }
             {
                 // Update bitboard for this square
                 let king_square = if castling_move < 2 { 4 } else { 60 };
@@ -794,6 +801,61 @@ impl BoardState {
             "{piece_placement} {active_color} {castling_rights} {en_passant_square} {half_move_clock} {full_move_clock}"
         )
     }
+    pub fn unmake_move(&mut self, r#move: Move) -> Result<(), MoveError> {
+        let moving_piece_type = self.piece_list[r#move.start];
+        let square_team = self.get_square_team(r#move.target);
+        let target_team = self.get_square_team(r#move.start);
+
+        if r#move.start == r#move.target {
+            return Err(MoveError::NotAMove);
+        }
+        if square_team != Team::None {
+            if target_team == square_team {
+                return Err(MoveError::AttackedAlly);
+            }
+            self.move_piece(
+                square_team,
+                moving_piece_type,
+                Move {
+                    start: r#move.target,
+                    target: r#move.start,
+                    captures: r#move.captures,
+                    is_pawn_double: false,
+                    is_castle: false,
+                },
+            );
+
+            if let Some(fallen_piece) = r#move.captures {
+                self.piece_list[r#move.target] = fallen_piece.piece_type;
+                self.board_pieces[fallen_piece.team as usize][fallen_piece.piece_type as usize]
+                    .state
+                    .view_bits_mut::<Lsb0>()
+                    .set(r#move.target, true);
+            }
+
+            if r#move.is_castle {
+                let is_queenside = r#move.target < r#move.start;
+                let is_kingside = r#move.target > r#move.start;
+                let rights_index = square_team as usize;
+                if is_kingside {
+                    self.castling_rights
+                        .view_bits_mut::<Lsb0>()
+                        .set(rights_index, true);
+                } else if is_queenside {
+                    self.castling_rights
+                        .view_bits_mut::<Lsb0>()
+                        .set(rights_index + 1, true);
+                }
+            }
+            if self.active_team == Team::Black {
+                self.active_team = Team::White;
+            } else {
+                self.turn_clock -= 1;
+                self.en_passant_square = None;
+                self.active_team = Team::Black // TODO: Account for three turn order with red before white
+            }
+            self.ply_clock -= 1;
+            self.update_capture_bitboards();
         } else {
             return Err(MoveError::NoUnit);
         }
