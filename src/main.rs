@@ -21,6 +21,7 @@ use ggez::conf::{WindowMode, WindowSetup};
 use ggez::event;
 use opponents::*;
 use rand::random_range;
+use tracing_subscriber::EnvFilter;
 use ui::MainState;
 
 #[tokio::main]
@@ -34,7 +35,19 @@ async fn main() {
     let board_full_test = BoardState::from_fen(String::from(START_POS_CHESS))
         .expect("Failed to create board from FEN");
 
-    println!("{}", board_full_test.get_team_coverage(Team::White));
+    let filter = EnvFilter::builder()
+        .from_env()
+        .expect("Failed to build envfilter")
+        .add_directive(
+            "chess_r=info"
+                .parse()
+                .expect("Failed to parse tracing directive"),
+        );
+
+    let sub_builder = tracing_subscriber::fmt().with_env_filter(filter);
+
+    sub_builder.compact().init();
+    
     let cb = ggez::ContextBuilder::new("chess-r", "3500pts")
         .window_setup(WindowSetup {
             title: String::from("CHESSR"),

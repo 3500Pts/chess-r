@@ -268,11 +268,11 @@ impl MoveComputer for ChessOpponent {
                             current_worst = mapped_legals.last().copied();
                         }
 
-                        println!(
+                        tracing::warn!(
                             "\n Best move ply {search_budget}: {:?}",
                             mapped_legals[0].eval
                         );
-                        println!("Mapped legals ply {search_budget}: {:?}", mapped_legals);
+                        tracing::warn!("Mapped legals ply {search_budget}: {:?}", mapped_legals);
                     } else if let Some(current_best_move) = current_best {
                         mapped_legals.push(current_best_move);
                     }
@@ -283,7 +283,7 @@ impl MoveComputer for ChessOpponent {
                 }
 
                 if current_best.is_some() {
-                    println!(
+                    tracing::warn!(
                         "Within limit of {:?} Ada got to ply {search_budget} eval: {}",
                         time_limit,
                         current_best.unwrap().eval
@@ -317,7 +317,7 @@ impl MoveComputer for ChessOpponent {
                 }
 
                 mapped_legals.sort_by(|a, b| b.eval.cmp(&a.eval));
-                println!(
+                tracing::debug!(
                     "Evaled to: {} and {}",
                     mapped_legals[0].eval,
                     mapped_legals[mapped_legals.len() - 1].eval

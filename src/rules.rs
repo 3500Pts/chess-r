@@ -151,6 +151,8 @@ mod tests {
 
         assert_eq!(fen, test_board.as_fen(), "Fen conversion failed")
     }
+
+    // TODO: Unmake castling
     #[test]
     fn unmake_move() {
         let mut start_board = BoardState::from_fen(String::from(

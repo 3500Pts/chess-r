@@ -173,8 +173,6 @@ impl MainState {
 
             if let Ok(image) = image_res {
                 s.piece_imgs.insert(id.to_owned(), image);
-            } else {
-                //println!("{image_res:?}");
             }
         });
 
@@ -375,10 +373,7 @@ impl MainState {
                     // We use the team id to compose the team part of the file name
                     let file_team =
                         String::from(if square_team == Team::White { "w" } else { "b" });
-
-                    if square_bit_idx == 0 {
-                        //println!("{square_team:?}")
-                    }
+                        
                     // So we know there is a piece, we can just match its type now
                     let team_bitboard = self.board.get_team_coverage(square_team);
                     let square_piece = match self.board.piece_list[square_bit_idx] {
