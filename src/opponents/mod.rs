@@ -67,13 +67,7 @@ fn evaluate_move(
     let risky = virtual_board.opponent_attacking_square(ava_move.target);
 
     let mut eval_score = 0;
-    if risky {
-        let score_pt = SCORES.iter().position(|(piece_type, _scre)| {
-            piece_type == &virtual_board.piece_list[ava_move.start]
-        });
 
-        eval_score -= SCORES[score_pt.unwrap()].1 * who_to_play;
-    }
 
     handle_move_result("MOVE", virtual_board.make_move(ava_move), ava_move, search_budget, virtual_board);
     let legals_all = virtual_board.get_legal_moves();
@@ -82,8 +76,16 @@ fn evaluate_move(
 
     eval_score += evaluate(virtual_board, legals_all);
 
+    if risky {
+        let score_pt = SCORES.iter().position(|(piece_type, _scre)| {
+            piece_type == &virtual_board.piece_list[ava_move.start]
+        });
+
+        eval_score -= SCORES[score_pt.unwrap()].1 * who_to_play;
+    }
+
     if ava_move.is_castle {
-        eval_score += 580
+        eval_score += 580 * who_to_play
     }
 
     let mut jiggle = rand::rng().random_range(-10..10);
@@ -93,7 +95,7 @@ fn evaluate_move(
     }
     if search_budget == 0 {
         handle_move_result("UNMOVE", virtual_board.unmake_move(ava_move), ava_move, search_budget, virtual_board);
-        return eval_score;
+        return eval_score + jiggle;
     }
 
     if virtual_board.active_team == Team::White {
