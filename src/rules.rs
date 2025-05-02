@@ -1,6 +1,8 @@
 mod tests {
     // Tests against all the rules
 
+    use crate::bitboard;
+    use crate::bitboard::Bitboard;
     use crate::BoardState;
     use crate::Team;
     use crate::r#move::Move;
@@ -134,6 +136,12 @@ mod tests {
             true,
             "Check doesn't work"
         );
+    }
+
+    #[test]
+    fn al_notation() {
+        assert_eq!(Bitboard::bit_idx_to_al_notation(37), Some(String::from("f5")), "Bit index to al notation returned incorrectly");
+        assert_eq!(Bitboard::al_notation_to_bit_idx("f5"), Some(37), "Algorithmic notation to bit index returned incorrectly");
     }
 
     #[test]

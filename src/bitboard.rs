@@ -125,16 +125,16 @@ impl BitAndAssign for Bitboard {
 
 impl Bitboard {
     pub fn al_notation_to_bit_idx(notation: &str) -> Option<usize> {
-        let list = ["a", "b", "c", "d", "e", "f", "g", "h"];
+        let list = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
         let split: Vec<char> = notation.chars().collect();
 
-        let file = list.iter().position(|n| *n == split[0].to_string());
+        let file = list.iter().position(|n| n == &split[0]);
 
         if let Some(file_id) = file {
             let rank = split[1].to_digit(10);
             if let Some(rank_id) = rank {
-                let result = (rank_id * 8) + file_id as u32;
+                let result = ((rank_id-1) * 8) + file_id as u32;
                 Some(result as usize)
             } else {
                 None
@@ -153,8 +153,8 @@ impl Bitboard {
         let rank_num = bit.div_floor(8);
         let file_num = bit % 8;
 
-        let rank_str = list[rank_num];
+        let file_str = list[file_num];
         
-        Some(format!("{}{}", rank_str, file_num + 1))
+        Some(format!("{}{}", file_str, rank_num +1))
     }
 }
