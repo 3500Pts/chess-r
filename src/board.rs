@@ -2,7 +2,7 @@ use bitvec::{order::Lsb0, view::BitView};
 
 use crate::{
     bitboard::*,
-    r#move::{self, Move, MoveError, Piece, *},
+    r#move::{Move, MoveError, Piece, *},
 };
 use std::{
     collections::HashMap,
@@ -626,13 +626,13 @@ impl BoardState {
                     .then(|| Team::Black);
 
                 if let Some(_bbc) = black_bitcheck {
-                    return Team::Black;
+                    Team::Black
                 } else {
                     // There is not a piece here.
-                    return Team::None;
+                    Team::None
                 }
             } else {
-                return Team::White;
+                Team::White
             }
         }
     }
@@ -775,14 +775,14 @@ impl BoardState {
             for (square, piece_type) in rank_of_pieces.iter().rev() {
                 let team = self.get_square_team(*square);
 
-                let mut piece_char = match *piece_type {
-                    &PieceType::None => '0',
-                    &PieceType::Pawn => 'p',
-                    &PieceType::Rook => 'r',
-                    &PieceType::Bishop => 'b',
-                    &PieceType::Knight => 'n',
-                    &PieceType::Queen => 'q',
-                    &PieceType::King => 'k',
+                let mut piece_char = match *(*piece_type) {
+                    PieceType::None => '0',
+                    PieceType::Pawn => 'p',
+                    PieceType::Rook => 'r',
+                    PieceType::Bishop => 'b',
+                    PieceType::Knight => 'n',
+                    PieceType::Queen => 'q',
+                    PieceType::King => 'k',
                 };
 
                 if team == Team::White {
@@ -828,7 +828,6 @@ impl BoardState {
                 return Err(MoveError::AttackedAlly);
             }
 
-
             self.move_piece(
                 square_team,
                 moving_piece_type,
@@ -840,7 +839,7 @@ impl BoardState {
                     is_castle: false,
                 },
             );
-            
+
             if let Some(fallen_piece) = r#move.captures {
                 self.piece_list[r#move.target] = fallen_piece.piece_type;
                 self.board_pieces[fallen_piece.team as usize][fallen_piece.piece_type as usize]

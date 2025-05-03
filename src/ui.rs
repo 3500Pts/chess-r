@@ -373,7 +373,7 @@ impl MainState {
                     // We use the team id to compose the team part of the file name
                     let file_team =
                         String::from(if square_team == Team::White { "w" } else { "b" });
-                        
+
                     // So we know there is a piece, we can just match its type now
                     let team_bitboard = self.board.get_team_coverage(square_team);
                     let square_piece = match self.board.piece_list[square_bit_idx] {
@@ -456,7 +456,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
         {
             let (mv_tx, mv_rx) = std::sync::mpsc::channel();
             let mut opponent_clone = self.opponent;
-            let board_clone = self.board.clone();
+            let board_clone = self.board;
 
             tokio::spawn(async move {
                 let legal = opponent_clone.get_move(board_clone);
@@ -570,14 +570,17 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 self.last_move_end = Some(c_move.target);
                 // Regenerate moves
                 self.board_legal_moves = Some(self.board.get_legal_moves());
-                let team_legal_moves_active = self.board.prune_moves_for_team(self.board_legal_moves.clone().unwrap(), self.board.active_team);
+                let team_legal_moves_active = self.board.prune_moves_for_team(
+                    self.board_legal_moves.clone().unwrap(),
+                    self.board.active_team,
+                );
                 let is_checked_active = self.board.is_team_checked(self.board.active_team);
 
                 self.move_history.push(MoveHistoryEntry {
                     piece_type: moving_piece_type,
                     team: moving_piece_team,
                     checks: self.board.is_team_checked(self.board.active_team),
-                    mate: team_legal_moves_active.len() == 0 && is_checked_active,
+                    mate: team_legal_moves_active.is_empty() && is_checked_active,
                     captures: c_move.captures.is_some(),
                     target: c_move.target,
                     start: c_move.start,

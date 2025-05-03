@@ -1,14 +1,6 @@
 mod tests {
     // Tests against all the rules
 
-    use crate::bitboard;
-    use crate::bitboard::Bitboard;
-    use crate::BoardState;
-    use crate::Team;
-    use crate::r#move::Move;
-    use bitvec::order::Lsb0;
-    use bitvec::view::BitView;
-
     #[test]
     fn en_passant() {
         let mut test_board = BoardState::from_fen(String::from(
@@ -140,8 +132,16 @@ mod tests {
 
     #[test]
     fn al_notation() {
-        assert_eq!(Bitboard::bit_idx_to_al_notation(37), Some(String::from("f5")), "Bit index to al notation returned incorrectly");
-        assert_eq!(Bitboard::al_notation_to_bit_idx("f5"), Some(37), "Algorithmic notation to bit index returned incorrectly");
+        assert_eq!(
+            Bitboard::bit_idx_to_al_notation(37),
+            Some(String::from("f5")),
+            "Bit index to al notation returned incorrectly"
+        );
+        assert_eq!(
+            Bitboard::al_notation_to_bit_idx("f5"),
+            Some(37),
+            "Algorithmic notation to bit index returned incorrectly"
+        );
     }
     #[test]
     fn fen() {
@@ -155,16 +155,16 @@ mod tests {
     // TODO: Unmake castling
     #[test]
     fn unmake_move() {
-        let mut start_board = BoardState::from_fen(String::from(
-            "8/7p/8/5r2/P3K2k/1P4p1/2P5/8 w - - 0 40",
-        )).expect("Invalid FEN used in testing");
+        let mut start_board =
+            BoardState::from_fen(String::from("8/7p/8/5r2/P3K2k/1P4p1/2P5/8 w - - 0 40"))
+                .expect("Invalid FEN used in testing");
 
         let compare_board = start_board.clone();
 
         let move_to_reverse = Move {
             start: Bitboard::al_notation_to_bit_idx("e4").unwrap(),
             target: Bitboard::al_notation_to_bit_idx("f5").unwrap(),
-            captures: start_board.get_piece_at_pos(Bitboard::al_notation_to_bit_idx("f5").unwrap()), 
+            captures: start_board.get_piece_at_pos(Bitboard::al_notation_to_bit_idx("f5").unwrap()),
             is_pawn_double: false,
             is_castle: false,
         };

@@ -15,6 +15,7 @@ pub struct Piece {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Default)]
 pub struct Move {
     pub start: usize,
     pub target: usize,
@@ -40,19 +41,6 @@ impl Display for Move {
         }
         Ok(())
     }
-    
-}
-impl Default for Move {
-    fn default() -> Self {
-        Move {
-            start: 0,
-            target: 0,
-            captures: None, 
-            is_pawn_double: false,
-            is_castle: false
-        }
-    }
-    
 }
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum MoveError {
@@ -241,7 +229,12 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
     let square_bit_index = piece.position;
 
     // index is a direction
-    for (index, direction_add) in DIRECTION_OFFSETS.iter().enumerate().take(index_end).skip(index_start)  {
+    for (index, direction_add) in DIRECTION_OFFSETS
+        .iter()
+        .enumerate()
+        .take(index_end)
+        .skip(index_start)
+    {
         let mut indexed_direction = board.edge_compute[square_bit_index][index];
 
         if indexed_direction >= 1 {

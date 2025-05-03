@@ -12,7 +12,7 @@ use rand::{Rng, seq::IndexedRandom};
 use crate::{
     bitboard::{Bitboard, PieceType, Team},
     board::BoardState,
-    r#move::{self, Move, MoveError},
+    r#move::{Move, MoveError},
 };
 
 const SCORES: [(PieceType, i32); 7] = [
@@ -236,7 +236,7 @@ impl MoveComputer for ChessOpponent {
                 let mut legals =
                     board.prune_moves_for_team_mut(board.get_legal_moves(), board.active_team);
                 let mut current_best: Option<NegamaxEval> = None;
-                let mut current_worst: Option<NegamaxEval> = None;
+                let current_worst: Option<NegamaxEval> = None;
                 let start_time = Instant::now();
 
                 if board.active_team_checkmate {
@@ -344,7 +344,7 @@ impl MoveComputer for ChessOpponent {
                     return Some(legals[0]);
                 }
                 // expensive...
-                let (mut best_white, mut best_black) = (i32::MIN, i32::MAX);
+                let (best_white, best_black) = (i32::MIN, i32::MAX);
 
                 for legal_move in legals {
                     let eval = evaluate_move(

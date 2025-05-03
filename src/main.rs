@@ -47,7 +47,7 @@ async fn main() {
     let sub_builder = tracing_subscriber::fmt().with_env_filter(filter);
 
     sub_builder.compact().init();
-    
+
     let cb = ggez::ContextBuilder::new("chess-r", "3500pts")
         .window_setup(WindowSetup {
             title: String::from("CHESSR"),
