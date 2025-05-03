@@ -112,7 +112,7 @@ fn evaluate_move(
             piece_type == &virtual_board.piece_list[ava_move.start]
         });
 
-        eval_score -= SCORES[score_pt.unwrap()].1 * who_to_play;
+        //eval_score -= SCORES[score_pt.unwrap()].1 * who_to_play;
     }
 
     if ava_move.is_castle {

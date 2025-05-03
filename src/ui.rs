@@ -571,12 +571,13 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 // Regenerate moves
                 self.board_legal_moves = Some(self.board.get_legal_moves());
                 let team_legal_moves_active = self.board.prune_moves_for_team(self.board_legal_moves.clone().unwrap(), self.board.active_team);
+                let is_checked_active = self.board.is_team_checked(self.board.active_team);
 
                 self.move_history.push(MoveHistoryEntry {
                     piece_type: moving_piece_type,
                     team: moving_piece_team,
                     checks: self.board.is_team_checked(self.board.active_team),
-                    mate: self.board.active_team_checkmate,
+                    mate: team_legal_moves_active.len() == 0 && is_checked_active,
                     captures: c_move.captures.is_some(),
                     target: c_move.target,
                     start: c_move.start,
