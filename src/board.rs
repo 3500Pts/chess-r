@@ -466,11 +466,11 @@ impl BoardState {
                 .expect("Attempted to access out-of-bounds castling bit")
                 .then_some(1)
                 .is_some()
-                && if castling_move < 2 {
+                && !(if castling_move < 2 {
                     white_check
                 } else {
                     black_check
-                }
+                })
             {
                 // Update bitboard for this square
                 let king_square = if castling_move < 2 { 4 } else { 60 };
