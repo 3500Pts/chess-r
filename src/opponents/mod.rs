@@ -12,7 +12,7 @@ use rand::{Rng, seq::IndexedRandom};
 use crate::{
     bitboard::{Bitboard, PieceType, Team},
     board::BoardState,
-    r#move::{Move, MoveError},
+    r#move::{Move, MoveError, Piece},
 };
 
 const SCORES: [(PieceType, i32); 7] = [
@@ -24,7 +24,15 @@ const SCORES: [(PieceType, i32); 7] = [
     (PieceType::Queen, 900),
     (PieceType::King, 1000000),
 ];
-
+const SAC_SCORES: [(PieceType, i32); 7] = [
+    (PieceType::None, 0),
+    (PieceType::Pawn, 50),
+    (PieceType::Knight, 150),
+    (PieceType::Bishop, 150),
+    (PieceType::Rook, 350),
+    (PieceType::Queen, 900),
+    (PieceType::King, 1000000),
+];
 #[derive(Debug, Copy, Clone)]
 struct NegamaxEval {
     eval: i32,
@@ -92,6 +100,35 @@ fn evaluate_move(
 
     let risky = virtual_board.opponent_attacking_square(ava_move.target);
 
+    let cap_score_idx = SCORES.iter().position(|(piece_type, _scre)| {
+        piece_type
+            == &ava_move
+                .captures
+                .unwrap_or(Piece {
+                    piece_type: PieceType::None,
+                    position: ava_move.target,
+                    team: virtual_board.active_team.opponent(),
+                })
+                .piece_type
+    });
+
+    let capture_score = SCORES[cap_score_idx.unwrap()].1;
+    let piece_score = {
+        let score_pt = SCORES.iter().position(|(piece_type, _scre)| {
+            piece_type == &virtual_board.piece_list[ava_move.start]
+        });
+        (SCORES[score_pt.unwrap()].1 * who_to_play)
+    };
+
+    let good_trade = capture_score - piece_score > 0;
+
+    let sacrifice_score = {
+        let score_pt = SAC_SCORES.iter().position(|(piece_type, _scre)| {
+            piece_type == &virtual_board.piece_list[ava_move.start]
+        });
+        (SAC_SCORES[score_pt.unwrap()].1 * who_to_play)
+    };
+
     let mut eval_score = 0;
 
     handle_move_result(
@@ -102,27 +139,37 @@ fn evaluate_move(
         virtual_board,
     );
     let legals_all = virtual_board.get_legal_moves();
-    let legals = virtual_board
-        .prune_moves_for_team(virtual_board.get_legal_moves(), virtual_board.active_team);
+    let legals = virtual_board.prune_moves_for_team(legals_all.clone(), virtual_board.active_team);
 
     eval_score += evaluate(virtual_board, legals_all);
 
-    if risky {
-        let score_pt = SCORES.iter().position(|(piece_type, _scre)| {
-            piece_type == &virtual_board.piece_list[ava_move.start]
-        });
-
-        //eval_score -= SCORES[score_pt.unwrap()].1 * who_to_play;
+    if risky && !good_trade {
+        //eval_score -= sacrifice_score
     }
 
     if ava_move.is_castle {
         eval_score += 200 * who_to_play
     }
 
-    let mut jiggle = rand::rng().random_range(-10..10);
+    let center_control_bits = Bitboard {
+        state: 103481868288,
+    };
+    let center_control =
+        virtual_board.capture_bitboard[virtual_board.active_team as usize] & center_control_bits;
+    if center_control.state > 0 {
+        //eval_score += 40 * center_control.state.count_ones() as i32;
+    }
+
+    let forking = virtual_board.capture_bitboard[virtual_board.active_team as usize]
+        & virtual_board.get_team_coverage(virtual_board.active_team.opponent());
+
+    if forking.state.count_ones() > 1 {
+        eval_score += 50 * forking.state.count_ones() as i32;
+    }
+    let jiggle = 0; //rand::rng().random_range(-1..1);
 
     if virtual_board.ply_clock > 6 {
-        jiggle = rand::rng().random_range(-70..70);
+        //jiggle = rand::rng().random_range(-70..70);
     }
     if search_budget == 0 {
         handle_move_result(
@@ -149,7 +196,7 @@ fn evaluate_move(
             max = max.max(move_score);
             best_white = best_white.max(move_score);
 
-            if max <= best_black {
+            if max > best_black {
                 break;
             }
         }
@@ -174,7 +221,7 @@ fn evaluate_move(
             min = min.min(move_score);
             best_black = best_black.min(move_score);
 
-            if min >= best_white {
+            if min < best_white {
                 break;
             }
         }
@@ -201,8 +248,6 @@ fn evaluate_team(board: &BoardState, team: Team, available_moves: Vec<Move>) -> 
     }
 
     // Rewards mobility, but kind of expensive
-    material += available_moves.len() as i32 * 10;
-
     material
         + (if board.active_team_checkmate && board.active_team != team {
             100000000
@@ -268,6 +313,7 @@ impl MoveComputer for ChessOpponent {
                         let (best_white, best_black) = (i32::MIN, i32::MAX);
                         if Instant::now().duration_since(start_time) > *time_limit {
                             will_break = true;
+                            break 'legal_check;
                         };
 
                         let eval = evaluate_move(
@@ -283,7 +329,7 @@ impl MoveComputer for ChessOpponent {
                         };
 
                         evals.0.push(NegamaxEval {
-                            eval,
+                            eval: eval + rand::rng().random_range(-2..=2),
                             legal_move: *legal_move,
                         })
                     }

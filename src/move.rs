@@ -14,8 +14,7 @@ pub struct Piece {
     pub position: usize,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Move {
     pub start: usize,
     pub target: usize,

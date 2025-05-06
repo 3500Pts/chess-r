@@ -456,8 +456,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
         {
             let (mv_tx, mv_rx) = std::sync::mpsc::channel();
             let mut opponent_clone = self.opponent;
-            let board_clone = self.board;
-
+            let board_clone = self.board.clone();
+            
             tokio::spawn(async move {
                 let legal = opponent_clone.get_move(board_clone);
                 mv_tx.send(legal).unwrap();

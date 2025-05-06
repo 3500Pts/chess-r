@@ -14,7 +14,15 @@ pub enum Team {
     Red = 3,
     None = 4,
 }
-
+impl Team {
+    pub fn opponent(&self) -> Self {
+        if self == &Self::Black {
+            Team::White
+        } else {
+            Team::Black
+        }
+    }
+}
 #[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
 pub enum PieceType {
     None = 0,
