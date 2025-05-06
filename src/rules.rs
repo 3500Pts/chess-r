@@ -1,8 +1,15 @@
 mod tests {
     // Tests against all the rules
 
+
+
     #[test]
     fn en_passant() {
+        use bitvec::view::BitView;
+        use bitvec::prelude::Lsb0;
+        use crate::board::BoardState;
+        use crate::r#move::Move;
+        use crate::Team;
         let mut test_board = BoardState::from_fen(String::from(
             "rnbqkbnr/4pppp/3p4/2p5/pp6/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1",
         ))
@@ -34,6 +41,11 @@ mod tests {
     #[test]
     // Test that you can't en passant after the next turn
     fn en_passant_deferred() {
+        use bitvec::view::BitView;
+        use bitvec::prelude::Lsb0;
+        use crate::board::BoardState;
+        use crate::r#move::Move;
+        use crate::Team;
         let mut test_board = BoardState::from_fen(String::from(
             "rnbqkbnr/4pppp/3p4/2p5/pp6/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1",
         ))
@@ -99,6 +111,11 @@ mod tests {
 
     // No castling in check
     fn check_castling() {
+        use bitvec::view::BitView;
+        use bitvec::prelude::Lsb0;
+        use crate::board::BoardState;
+        use crate::Team;
+
         let test_board = BoardState::from_fen(String::from(
             "rnb1kbnr/ppp2ppp/8/3p4/3pP3/3B1N2/PPP2qPP/RNBQK2R w KQkq - 0 1",
         ))
@@ -119,6 +136,8 @@ mod tests {
     // Check
     #[test]
     fn check() {
+        use crate::board::BoardState;
+        use crate::Team;
         let test_board = BoardState::from_fen(String::from(
             "rnb1kbnr/ppp2ppp/8/3p4/3pP3/3B1N2/PPP2qPP/RNBQK2R w KQkq - 0 1",
         ))
@@ -132,6 +151,7 @@ mod tests {
 
     #[test]
     fn al_notation() {
+        use crate::bitboard::Bitboard;
         assert_eq!(
             Bitboard::bit_idx_to_al_notation(37),
             Some(String::from("f5")),
@@ -145,6 +165,7 @@ mod tests {
     }
     #[test]
     fn fen() {
+        use crate::board::BoardState;
         let fen = String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
         let test_board = BoardState::from_fen(fen.clone()).expect("Invalid FEN string used");
@@ -155,6 +176,10 @@ mod tests {
     // TODO: Unmake castling
     #[test]
     fn unmake_move() {
+        use crate::board::BoardState;
+        use crate::r#move::Move;
+        use crate::bitboard::Bitboard;
+
         let mut start_board =
             BoardState::from_fen(String::from("8/7p/8/5r2/P3K2k/1P4p1/2P5/8 w - - 0 40"))
                 .expect("Invalid FEN used in testing");
