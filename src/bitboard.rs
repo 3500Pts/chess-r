@@ -165,4 +165,28 @@ impl Bitboard {
 
         Some(format!("{}{}", file_str, rank_num + 1))
     }
+
+    
+    pub fn set_bit<O: BitOrder>(&mut self, index: usize, value: bool) {
+        let bit_slice = self.state.view_bits_mut::<O>();
+
+        let bits = 64;
+        if index < bits {
+            bit_slice.set(index, value);
+        }
+    }
+
+    pub fn get_bit<Order: BitOrder>(&mut self, index: usize) -> bool {
+        let bit_slice = self.state.view_bits::<Order>();
+
+        let bits = 64;
+        if index < bits {
+            let bit_ref_option = bit_slice.get(index);
+            if let Some(bit_ref) = bit_ref_option {
+                return bit_ref.then_some(1).is_some()
+            } 
+        }
+
+        false
+    }
 }
