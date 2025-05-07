@@ -1,4 +1,7 @@
-use std::{fmt::{Display, Formatter}, ops::{Add, Sub}};
+use std::{
+    fmt::{Display, Formatter},
+    ops::{Add, Sub},
+};
 
 use bitvec::{order::Lsb0, slice::BitSlice, view::BitView};
 
@@ -133,10 +136,7 @@ pub fn precalc_pawn_push<const S: usize>() -> [[Bitboard; S]; 2] {
                 square_target.div_floor(8) == 6
             };
 
-            square_bb.set_bit::<Lsb0>(
-                (square_target + rank_advance_diff) as usize,
-                !is_ranked_out,
-            );
+            square_bb.set_bit::<Lsb0>((square_target + rank_advance_diff) as usize, !is_ranked_out);
             square_bb.set_bit::<Lsb0>(
                 (square_target + rank_advance_diff + rank_advance_diff) as usize,
                 is_at_start,
@@ -183,40 +183,17 @@ pub fn precalc_king_attack<const S: usize>() -> [[Bitboard; S]; 2] {
 
             let bit_slice = square_bb.state.view_bits_mut::<Lsb0>();
 
-            square_bb.set_bit::<Lsb0>(                
-                (square_target + rank_advance_diff - 1) as usize,
-                !is_a_file,
-            );
-            square_bb.set_bit::<Lsb0>(
-                
-                (square_target + rank_advance_diff + 1) as usize,
-                !is_h_file,
-            );
+            square_bb.set_bit::<Lsb0>((square_target + rank_advance_diff - 1) as usize, !is_a_file);
+            square_bb.set_bit::<Lsb0>((square_target + rank_advance_diff + 1) as usize, !is_h_file);
 
-            square_bb.set_bit::<Lsb0>( (square_target - 1) as usize, !is_a_file);
-            square_bb.set_bit::<Lsb0>( (square_target + 1) as usize,  !is_h_file);
+            square_bb.set_bit::<Lsb0>((square_target - 1) as usize, !is_a_file);
+            square_bb.set_bit::<Lsb0>((square_target + 1) as usize, !is_h_file);
 
-            square_bb.set_bit::<Lsb0>(
-                
-                (square_target + rank_advance_diff) as usize,
-                true,
-            );
-            square_bb.set_bit::<Lsb0>(
-                
-                (square_target - rank_advance_diff) as usize,
-                true,
-            );
+            square_bb.set_bit::<Lsb0>((square_target + rank_advance_diff) as usize, true);
+            square_bb.set_bit::<Lsb0>((square_target - rank_advance_diff) as usize, true);
 
-            square_bb.set_bit::<Lsb0>(
-                
-                (square_target - rank_advance_diff - 1) as usize,
-                !is_a_file,
-            );
-            square_bb.set_bit::<Lsb0>(
-                
-                (square_target - rank_advance_diff + 1) as usize,
-                !is_h_file,
-            );
+            square_bb.set_bit::<Lsb0>((square_target - rank_advance_diff - 1) as usize, !is_a_file);
+            square_bb.set_bit::<Lsb0>((square_target - rank_advance_diff + 1) as usize, !is_h_file);
 
             square_target += 1;
         }
@@ -517,19 +494,19 @@ pub fn get_precomputed_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<
     let pawn_step_1 = match piece.team {
         Team::Black => piece.position.sub(8),
         Team::White => piece.position.add(8),
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     let pawn_step_2 = match piece.team {
         Team::Black => piece.position.sub(16),
         Team::White => piece.position.add(16),
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     let far_edge_dist_for_pawns = match piece.team {
         Team::Black => board.edge_compute[piece.position][1],
         Team::White => board.edge_compute[piece.position][0],
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     let mut push_bit = board.pawn_push_compute[piece.team as usize][piece.position];

@@ -482,7 +482,10 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 self.queued_move
             }
         } else {
-            let legal_moves = self.board.prune_moves_for_team(self.board_legal_moves.clone().unwrap_or(vec![]), self.board.active_team);
+            let legal_moves = self.board.prune_moves_for_team(
+                self.board_legal_moves.clone().unwrap_or(vec![]),
+                self.board.active_team,
+            );
             if legal_moves.len() == 0 {
                 self.end_game();
                 process::exit(0);
@@ -504,9 +507,12 @@ impl event::EventHandler<ggez::GameError> for MainState {
             let square_idx = MainState::get_square_idx_from_pixel(x, y) as usize;
             tracing::debug!("Mouse down on square {}", square_idx);
 
-
             // If there's a piece here, "select" the piece at this index to drag
-            self.selected_square = if square_idx < 64 { Some(square_idx) } else {None};
+            self.selected_square = if square_idx < 64 {
+                Some(square_idx)
+            } else {
+                None
+            };
         }
 
         Ok(())

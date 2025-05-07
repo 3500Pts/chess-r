@@ -79,7 +79,7 @@ pub struct BoardState {
     pub active_team: Team,
     pub pawn_attack_compute: [[Bitboard; 64]; 2],
     pub pawn_push_compute: [[Bitboard; 64]; 2],
-    pub knight_compute: [Bitboard; 64]
+    pub knight_compute: [Bitboard; 64],
 }
 impl Default for BoardState {
     fn default() -> Self {
@@ -390,7 +390,6 @@ impl BoardState {
 
             for (square, (bitboard, _legal_moves)) in legals.iter().enumerate().take(64) {
                 if self.get_square_team(square) as usize == team_id {
-
                     let piece_type = self.piece_list[square];
                     if piece_type == PieceType::Pawn {
                         capture_bitboard |= *bitboard & !self.pawn_push_compute[team_id][square]
@@ -457,9 +456,7 @@ impl BoardState {
                     PieceType::Bishop | PieceType::Rook | &PieceType::Queen => {
                         compute_slider(self, piece_obj)
                     }
-                    PieceType::King => {
-                        get_precomputed_king(self, piece_obj)
-                    }
+                    PieceType::King => get_precomputed_king(self, piece_obj),
                     PieceType::Knight => get_precomputed_knight(self, piece_obj),
                     PieceType::Pawn => get_precomputed_pawn(self, piece_obj),
                     _ => default_push,
