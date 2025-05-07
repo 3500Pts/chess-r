@@ -73,9 +73,13 @@ pub struct BoardState {
     pub active_team_checkmate: bool,
     pub piece_list: [PieceType; 64],
     pub edge_compute: [[usize; 8]; 64],
+    pub king_compute: [[Bitboard; 64]; 2],
     pub capture_bitboard: [Bitboard; 2],
     pub en_passant_turn: Option<i64>,
     pub active_team: Team,
+    pub pawn_attack_compute: [[Bitboard; 64]; 2],
+    pub pawn_push_compute: [[Bitboard; 64]; 2],
+    pub knight_compute: [Bitboard; 64]
 }
 impl Default for BoardState {
     fn default() -> Self {
@@ -90,6 +94,10 @@ impl Default for BoardState {
             active_team_checkmate: false,
             piece_list: [PieceType::None; 64], // TODO: Make this compatible with any amount of squares/any size of map. Maybe as a type argument to the board state?
             edge_compute: compute_edges(),
+            king_compute: precalc_king_attack::<64>(),
+            knight_compute: precalc_knight_attack::<64>(),
+            pawn_attack_compute: precalc_pawn_attack::<64>(),
+            pawn_push_compute: precalc_pawn_push::<64>(),
             capture_bitboard: [Bitboard { state: 0 }; 2],
             active_team: Team::White,
         }
@@ -382,7 +390,13 @@ impl BoardState {
 
             for (square, (bitboard, _legal_moves)) in legals.iter().enumerate().take(64) {
                 if self.get_square_team(square) as usize == team_id {
-                    capture_bitboard |= *bitboard
+
+                    let piece_type = self.piece_list[square];
+                    if piece_type == PieceType::Pawn {
+                        capture_bitboard |= *bitboard & !self.pawn_push_compute[team_id][square]
+                    } else {
+                        capture_bitboard |= *bitboard;
+                    }
                 }
             }
             self.capture_bitboard[team_id] = capture_bitboard;
@@ -440,11 +454,14 @@ impl BoardState {
                     team,
                 };
                 let (psuedo_bitboard, psuedo_moves) = match piece_type {
-                    PieceType::Bishop | PieceType::Rook | &PieceType::Queen | PieceType::King => {
+                    PieceType::Bishop | PieceType::Rook | &PieceType::Queen => {
                         compute_slider(self, piece_obj)
                     }
-                    PieceType::Knight => compute_knight(self, piece_obj),
-                    PieceType::Pawn => compute_pawn(self, piece_obj),
+                    PieceType::King => {
+                        get_precomputed_king(self, piece_obj)
+                    }
+                    PieceType::Knight => get_precomputed_knight(self, piece_obj),
+                    PieceType::Pawn => get_precomputed_pawn(self, piece_obj),
                     _ => default_push,
                 };
 

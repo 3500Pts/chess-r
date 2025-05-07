@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use bitvec::{order::Lsb0, view::BitView};
+use bitvec::{order::Lsb0, slice::BitSlice, view::BitView};
 
 use crate::{
     bitboard::{Bitboard, PieceType, Team},
@@ -81,6 +81,165 @@ fn is_square_attackable(board: &BoardState, piece: Piece, possible_target: usize
             false
         }
     }
+}
+
+pub fn safely_set_bit(bit_slice: &mut BitSlice<u64, Lsb0>, index: usize, bits: usize, value: bool) {
+    if index < bits {
+        bit_slice.set(index, value)
+    }
+}
+pub fn precalc_pawn_attack<const S: usize>() -> [[Bitboard; S]; 2] {
+    let mut array = [[Bitboard::default(); S]; 2];
+    for index in Team::White as usize..=Team::Black as usize {
+        let mut square_target: i32 = 0;
+
+        for square_bb in &mut array[index] {
+            let rank_advance_diff: i32 = if (index == 0) {
+                S.isqrt() as i32
+            } else {
+                -(S.isqrt() as i32)
+            };
+
+            let target = square_target + rank_advance_diff - (rank_advance_diff.signum());
+            let target2 = square_target + rank_advance_diff + (rank_advance_diff.signum());
+
+            let current_file = square_target % rank_advance_diff.abs();
+            let target_file = target % rank_advance_diff.abs();
+            let target2_file = target2 % rank_advance_diff.abs();
+
+            let is_file_jumping = target.is_negative() || target_file.abs_diff(current_file) > 3;
+            let is_file_jumping2 = target2.is_negative() || target2_file.abs_diff(current_file) > 3;
+
+            let bit_slice = square_bb.state.view_bits_mut::<Lsb0>();
+            safely_set_bit(bit_slice, target as usize, 64, !is_file_jumping);
+            safely_set_bit(bit_slice, target2 as usize, 64, !is_file_jumping2);
+
+            square_target += 1;
+        }
+    }
+    array
+}
+pub fn precalc_pawn_push<const S: usize>() -> [[Bitboard; S]; 2] {
+    let mut array = [[Bitboard::default(); S]; 2];
+    for index in Team::White as usize..=Team::Black as usize {
+        let mut square_target: i32 = 0;
+
+        for square_bb in &mut array[index] {
+            let rank_advance_diff: i32 = if (index == 0) {
+                S.isqrt() as i32
+            } else {
+                -(S.isqrt() as i32)
+            };
+            let is_ranked_out = square_target.div_floor(rank_advance_diff.abs())
+                == rank_advance_diff.abs() - 1
+                || square_target.div_floor(rank_advance_diff.abs()) == 0;
+            let is_at_start = if (index == 0) {
+                square_target.div_floor(8) == 1
+            } else {
+                square_target.div_floor(8) == 6
+            };
+
+            safely_set_bit(
+                square_bb.state.view_bits_mut::<Lsb0>(),
+                (square_target + rank_advance_diff) as usize,
+                64,
+                !is_ranked_out,
+            );
+            safely_set_bit(
+                square_bb.state.view_bits_mut::<Lsb0>(),
+                (square_target + rank_advance_diff + rank_advance_diff) as usize,
+                64,
+                is_at_start,
+            );
+
+            square_target += 1;
+        }
+    }
+    array
+}
+
+pub fn precalc_knight_attack<const S: usize>() -> [Bitboard; S] {
+    let mut array = [Bitboard::default(); S];
+    let knight_moves: [i32; 8] = [10, 17, -10, -17, 15, -15, 6, -6];
+
+    let mut square_target = 0;
+
+    for square_bb in &mut array {
+        let bit_slice =  square_bb.state.view_bits_mut::<Lsb0>();
+        for knight_square in knight_moves {
+            let target = (square_target + knight_square);
+            let target_file = target % 8;
+            let valid_move = target_file.abs_diff(square_target % 8) <= 3;
+
+            safely_set_bit(bit_slice, target as usize, 64, valid_move);
+        }
+        square_target += 1;
+    }
+    array
+}
+pub fn precalc_king_attack<const S: usize>() -> [[Bitboard; S]; 2] {
+    let mut array = [[Bitboard::default(); S]; 2];
+    for index in Team::White as usize..=Team::Black as usize {
+        let mut square_target: i32 = 0;
+
+        for square_bb in &mut array[index] {
+            let rank_advance_diff: i32 = if (index == 0) {
+                S.isqrt() as i32
+            } else {
+                -(S.isqrt() as i32)
+            };
+
+            let is_a_file = square_target % rank_advance_diff.abs() == 0;
+            let is_h_file = square_target % (rank_advance_diff.abs() - 1) == 0;
+
+            let bit_slice = square_bb.state.view_bits_mut::<Lsb0>();
+
+            safely_set_bit(
+                bit_slice,
+                (square_target + rank_advance_diff - 1) as usize,
+                64,
+                !is_a_file,
+            );
+            safely_set_bit(
+                bit_slice,
+                (square_target + rank_advance_diff + 1) as usize,
+                64,
+                !is_h_file,
+            );
+
+            safely_set_bit(bit_slice, (square_target - 1) as usize, 64, !is_a_file);
+            safely_set_bit(bit_slice, (square_target + 1) as usize, 64, !is_h_file);
+
+            safely_set_bit(
+                bit_slice,
+                (square_target + rank_advance_diff) as usize,
+                64,
+                true,
+            );
+            safely_set_bit(
+                bit_slice,
+                (square_target - rank_advance_diff) as usize,
+                64,
+                true,
+            );
+
+            safely_set_bit(
+                bit_slice,
+                (square_target - rank_advance_diff - 1) as usize,
+                64,
+                !is_a_file,
+            );
+            safely_set_bit(
+                bit_slice,
+                (square_target - rank_advance_diff + 1) as usize,
+                64,
+                !is_h_file,
+            );
+
+            square_target += 1;
+        }
+    }
+    array
 }
 
 fn psuedolegalize_move(
@@ -328,4 +487,60 @@ pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
     }
 
     (bitboard, computed_moves)
+}
+
+fn bitboard_to_movelist(board: &BoardState, piece: Piece, bitboard: Bitboard) -> Vec<Move> {
+    let mut computed_moves: Vec<Move> = Vec::new();
+
+    for index in bitboard.state.view_bits::<Lsb0>().iter_ones() {
+        let far_edge_dist_for_pawns = match piece.team {
+            Team::Black => board.edge_compute[piece.position][1],
+            Team::White => board.edge_compute[piece.position][0],
+            _ => {
+                unreachable!()
+            }
+        };
+
+        computed_moves.push(Move {
+            start: piece.position,
+            target: index,
+            captures: board.get_piece_at_pos(index),
+            is_pawn_double: far_edge_dist_for_pawns == 6
+                && piece.piece_type == PieceType::Pawn
+                && index.abs_diff(piece.position) == 16,
+            is_castle: false,
+        });
+    }
+
+    computed_moves
+}
+pub fn get_precomputed_king(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
+    let mut bitboard = Bitboard::default();
+
+    let team_cov = board.get_team_coverage(piece.team);
+
+    let king_bit = board.king_compute[piece.team as usize][piece.position];
+
+    bitboard |= king_bit & !team_cov;
+
+    (bitboard, bitboard_to_movelist(board, piece, bitboard))
+}
+
+pub fn get_precomputed_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
+    let team_cov =
+        board.get_team_coverage(piece.team) | board.get_team_coverage(piece.team.opponent());
+    let enemy_cov = board.get_team_coverage(piece.team.opponent());
+
+    let push_bit = board.pawn_push_compute[piece.team as usize][piece.position] & !team_cov;
+
+    let push_attack = board.pawn_attack_compute[piece.team as usize][piece.position] & enemy_cov;
+
+    let pawn_bits = push_attack | push_bit;
+
+    (pawn_bits, bitboard_to_movelist(board, piece, pawn_bits))
+}
+pub fn get_precomputed_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
+    let team_cov = board.get_team_coverage(piece.team);
+    let knight_bits = board.knight_compute[piece.position] & !team_cov;
+    (knight_bits, bitboard_to_movelist(board, piece, knight_bits))
 }
