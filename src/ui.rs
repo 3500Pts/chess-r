@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::process;
 use std::sync::mpsc::Receiver;
+use std::time::Duration;
 
 use bitvec::order::Lsb0;
 use bitvec::view::BitView;
@@ -194,7 +196,7 @@ impl MainState {
         });
         Ok(s)
     }
-    pub fn to_pgn(&self) {
+    pub fn to_pgn(&self, result: &str) {
         let current_date = Utc::now().format("%Y-%m-%d");
         let bot_name = format!("Bot {}", self.opponent);
 
@@ -208,8 +210,6 @@ impl MainState {
         } else {
             &bot_name
         };
-
-        let result = "1-0";
 
         let mut pgn_header = format!(
             "[Event \"chess-r match\"]\n[Site \"chess-r\"]\n[Date \"{current_date}\"]\n[Round \"1\"]\n[White \"{white_name}\"]\n[Black \"{black_name}\"]\n[Result \"{result}\"]\n\n"
@@ -228,16 +228,18 @@ impl MainState {
         println!("{pgn_header}");
     }
     fn end_game(&self) {
-        let opponent = if self.board.active_team == Team::White {
-            Team::Black
-        } else {
-            Team::White
-        };
+        let opponent = self.board.active_team.opponent();
 
         if self.board.is_team_checked(self.board.active_team) {
             println!("Checkmate - {opponent:?} wins");
+            let mut result_string = "1-0";
+            if self.board.active_team == Team::White {
+                result_string = "0-1"
+            }
+            self.to_pgn(result_string);
         } else {
             println!("Stalemate");
+            self.to_pgn("0-0")
         }
     }
     fn draw_board(&mut self, ctx: &mut Context, canvas: &mut Canvas) -> GameResult<()> {
@@ -258,7 +260,7 @@ impl MainState {
                             .0
                             .state
                             .view_bits::<Lsb0>()
-                            .get(square_number);
+                            .get(square_number.min(63));
 
                         let board_team = self.board.get_square_team(selected_square);
                         if status_on_bitboard.unwrap().then_some(true).is_some()
@@ -457,7 +459,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             let (mv_tx, mv_rx) = std::sync::mpsc::channel();
             let mut opponent_clone = self.opponent;
             let board_clone = self.board.clone();
-            
+
             tokio::spawn(async move {
                 let legal = opponent_clone.get_move(board_clone);
                 mv_tx.send(legal).unwrap();
@@ -471,7 +473,6 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 if let Ok(legal_move) = legal {
                     if legal_move.is_none() {
                         self.end_game();
-                        self.to_pgn();
                     }
                     legal_move
                 } else {
@@ -481,7 +482,13 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 self.queued_move
             }
         } else {
-            self.queued_move
+            let legal_moves = self.board.prune_moves_for_team(self.board_legal_moves.clone().unwrap_or(vec![]), self.board.active_team);
+            if legal_moves.len() == 0 {
+                self.end_game();
+                process::exit(0);
+            } else {
+                self.queued_move
+            }
         };
 
         Ok(())
@@ -497,8 +504,9 @@ impl event::EventHandler<ggez::GameError> for MainState {
             let square_idx = MainState::get_square_idx_from_pixel(x, y) as usize;
             tracing::debug!("Mouse down on square {}", square_idx);
 
+
             // If there's a piece here, "select" the piece at this index to drag
-            self.selected_square = Some(square_idx);
+            self.selected_square = if square_idx < 64 { Some(square_idx) } else {None};
         }
 
         Ok(())
