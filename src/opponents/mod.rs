@@ -144,7 +144,7 @@ fn evaluate_move(
     eval_score += evaluate(virtual_board, legals_all);
 
     if risky && !good_trade {
-        //eval_score -= sacrifice_score
+        eval_score -= sacrifice_score
     }
 
     if ava_move.is_castle {
@@ -223,7 +223,6 @@ fn evaluate_move(
                 break;
             }
             best_black = best_black.min(move_score);
-
         }
         handle_move_result(
             "UNMOVE",
