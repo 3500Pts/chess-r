@@ -30,7 +30,7 @@ const SAC_SCORES: [(PieceType, i32); 7] = [
     (PieceType::Knight, 150),
     (PieceType::Bishop, 150),
     (PieceType::Rook, 350),
-    (PieceType::Queen, 900),
+    (PieceType::Queen, 1100),
     (PieceType::King, 1000000),
 ];
 #[derive(Debug, Copy, Clone)]
@@ -117,7 +117,7 @@ fn evaluate_move(
         let score_pt = SCORES.iter().position(|(piece_type, _scre)| {
             piece_type == &virtual_board.piece_list[ava_move.start]
         });
-        (SCORES[score_pt.unwrap()].1 * who_to_play)
+        SCORES[score_pt.unwrap()].1 * who_to_play
     };
 
     let good_trade = capture_score - piece_score > 0;
@@ -126,7 +126,7 @@ fn evaluate_move(
         let score_pt = SAC_SCORES.iter().position(|(piece_type, _scre)| {
             piece_type == &virtual_board.piece_list[ava_move.start]
         });
-        (SAC_SCORES[score_pt.unwrap()].1 * who_to_play)
+        SAC_SCORES[score_pt.unwrap()].1 * who_to_play
     };
 
     let mut eval_score = 0;
@@ -148,16 +148,16 @@ fn evaluate_move(
     }
 
     if ava_move.is_castle {
-        eval_score += 200 * who_to_play
+        eval_score += 1200 * who_to_play
     }
 
     let center_control_bits = Bitboard {
-        state: 103481868288,
+        state: 0x1818000000,
     };
     let center_control =
-        virtual_board.capture_bitboard[virtual_board.active_team as usize] & center_control_bits;
+        virtual_board.get_team_coverage(virtual_board.active_team) & center_control_bits;
     if center_control.state > 0 {
-        //eval_score += 40 * center_control.state.count_ones() as i32;
+        eval_score -= center_control.state.count_ones() as i32;
     }
 
     let forking = virtual_board.capture_bitboard[virtual_board.active_team as usize]
@@ -166,6 +166,7 @@ fn evaluate_move(
     if forking.state.count_ones() > 1 {
         eval_score += 50 * forking.state.count_ones() as i32;
     }
+    eval_score += search_budget;
     let jiggle = 0; //rand::rng().random_range(-1..1);
 
     if virtual_board.ply_clock > 6 {
@@ -194,11 +195,10 @@ fn evaluate_move(
                 best_black,
             );
             max = max.max(move_score);
-            best_white = best_white.max(move_score);
-
-            if max > best_black {
+            if max >= best_black {
                 break;
             }
+            best_white = best_white.max(move_score);
         }
         handle_move_result(
             "UNMOVE",
@@ -219,11 +219,11 @@ fn evaluate_move(
                 best_black,
             );
             min = min.min(move_score);
-            best_black = best_black.min(move_score);
-
-            if min < best_white {
+            if min <= best_white {
                 break;
             }
+            best_black = best_black.min(move_score);
+
         }
         handle_move_result(
             "UNMOVE",
