@@ -944,13 +944,14 @@ impl BoardState {
             | self.capture_bitboard[Team::Black as usize])
             & !self.capture_bitboard[self.active_team as usize];
 
-        enemy_capture_bitboard
+        let attacked = enemy_capture_bitboard
             .state
             .view_bits::<Lsb0>()
             .get(pos)
             .unwrap()
             .then_some(true)
-            .is_some()
+            .is_some();
+        attacked
     }
     pub fn get_piece_at_pos(&self, pos: usize) -> Option<Piece> {
         let target_piece_type = self.piece_list[pos];

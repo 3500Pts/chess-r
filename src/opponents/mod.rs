@@ -12,7 +12,7 @@ use rand::{Rng, seq::IndexedRandom};
 use crate::{
     bitboard::{Bitboard, PieceType, Team},
     board::BoardState,
-    r#move::{Move, MoveError, Piece},
+    r#move::{self, Move, MoveError, Piece},
 };
 
 const SCORES: [(PieceType, i32); 7] = [
@@ -83,6 +83,14 @@ fn handle_move_result(
         tracing::info!("{}", virtual_board.get_team_coverage(Team::White))
     }
 }
+fn eval_max(
+    board: &mut BoardState,
+    ava_move: Move,
+    search_budget: i32,
+    mut best_white: i32,
+    mut best_black: i32,
+) {
+}
 fn evaluate_move(
     board: &mut BoardState,
     ava_move: Move,
@@ -144,29 +152,33 @@ fn evaluate_move(
     eval_score += evaluate(virtual_board, legals_all);
 
     if risky && !good_trade {
-        eval_score -= sacrifice_score
+        //eval_score -= sacrifice_score
     }
 
     if ava_move.is_castle {
         eval_score += 1200 * who_to_play
     }
 
+    if virtual_board.active_team_checkmate {
+        eval_score -= 100000000 * who_to_play;
+    }
     let center_control_bits = Bitboard {
         state: 0x1818000000,
     };
     let center_control =
         virtual_board.get_team_coverage(virtual_board.active_team) & center_control_bits;
     if center_control.state > 0 {
-        eval_score -= center_control.state.count_ones() as i32;
+        // For some reason negatively attributing it makes it focus on the center
+        //  eval_score -= (center_control.state.count_ones() as i32) * who_to_play * 3;
     }
 
     let forking = virtual_board.capture_bitboard[virtual_board.active_team as usize]
         & virtual_board.get_team_coverage(virtual_board.active_team.opponent());
 
     if forking.state.count_ones() > 1 {
-        eval_score += 50 * forking.state.count_ones() as i32;
+        eval_score += 50 * (forking.state.count_ones() as i32) * who_to_play;
     }
-    eval_score += search_budget;
+
     let jiggle = 0; //rand::rng().random_range(-1..1);
 
     if virtual_board.ply_clock > 6 {
@@ -194,8 +206,9 @@ fn evaluate_move(
                 best_white,
                 best_black,
             );
-            max = max.max(move_score);
-            if max >= best_black {
+            max = max.max(best_white);
+            //println!("W{best_black}, {best_white} {search_budget}");
+            if move_score >= best_black {
                 break;
             }
             best_white = best_white.max(move_score);
@@ -218,8 +231,9 @@ fn evaluate_move(
                 best_white,
                 best_black,
             );
-            min = min.min(move_score);
-            if min <= best_white {
+            min = min.min(best_black);
+            // println!("B{best_white}, {best_black} {search_budget}");
+            if move_score <= best_white {
                 break;
             }
             best_black = best_black.min(move_score);
@@ -248,11 +262,6 @@ fn evaluate_team(board: &BoardState, team: Team, available_moves: Vec<Move>) -> 
 
     // Rewards mobility, but kind of expensive
     material
-        + (if board.active_team_checkmate && board.active_team != team {
-            100000000
-        } else {
-            0
-        })
 }
 fn evaluate(board: &BoardState, all_moves: Vec<(Bitboard, Vec<Move>)>) -> i32 {
     let wl = board.prune_moves_for_team(all_moves.clone(), Team::White);
@@ -295,7 +304,7 @@ impl MoveComputer for ChessOpponent {
                     let mut evals: EvaluationList = EvaluationList(Vec::new());
 
                     let mut will_break = false;
-                    // Check the current best first
+                    /* Check the current best first
                     legals.sort_by(|c_a, c_b| {
                         if let Some(cb) = current_best {
                             if cb.legal_move == *c_a && cb.legal_move != *c_b {
@@ -306,10 +315,11 @@ impl MoveComputer for ChessOpponent {
                         } else {
                             Ordering::Equal
                         }
-                    });
+                    });*/
+                    let (best_white, best_black) = (i32::MIN, i32::MAX);
                     'legal_check: for legal_move in &legals {
                         // Preset the AB pruning with the eval we already have
-                        let (best_white, best_black) = (i32::MIN, i32::MAX);
+
                         if Instant::now().duration_since(start_time) > *time_limit {
                             will_break = true;
                             break 'legal_check;

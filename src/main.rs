@@ -52,7 +52,7 @@ async fn main() {
         .window_setup(WindowSetup {
             title: String::from("CHESSR"),
             samples: ggez::conf::NumSamples::Four,
-            icon: String::from("/horsey/bp.png"),
+            icon: String::from("/horsey/bk.png"),
             srgb: false,
             vsync: true,
         })
@@ -68,7 +68,7 @@ async fn main() {
         board_full_test,
         &mut ctx,
         player_team,
-        ChessOpponent::Ada(Duration::from_millis(1050)),
+        ChessOpponent::Ada(Duration::from_millis(400)),
     )
     .unwrap();
     event::run(ctx, event_loop, state);

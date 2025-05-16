@@ -479,9 +479,11 @@ pub fn get_precomputed_king(board: &BoardState, piece: Piece) -> (Bitboard, Vec<
 
     let team_cov = board.get_team_coverage(piece.team);
 
+    let cap_bits = board.capture_bitboard[piece.team.opponent() as usize];
+
     let king_bit = board.king_compute[piece.team as usize][piece.position];
 
-    bitboard |= king_bit & !team_cov;
+    bitboard |= king_bit & !team_cov & !cap_bits;
 
     (bitboard, bitboard_to_movelist(board, piece, bitboard))
 }
