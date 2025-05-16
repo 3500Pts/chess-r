@@ -945,9 +945,7 @@ impl BoardState {
         Ok(())
     }
     pub fn opponent_attacking_square(&self, pos: usize) -> bool {
-        let enemy_capture_bitboard = (self.capture_bitboard[Team::White as usize]
-            | self.capture_bitboard[Team::Black as usize])
-            & !self.capture_bitboard[self.active_team as usize];
+        let enemy_capture_bitboard = self.capture_bitboard[self.active_team.opponent() as usize];
 
         let attacked = enemy_capture_bitboard
             .state
