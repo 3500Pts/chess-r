@@ -306,4 +306,21 @@ mod tests {
         println!("{test_board:?}");
         assert!(test_board.active_team_checkmate, "BoardState did not calculate checkmate from position {}, which is mate for black", test_board.as_fen());
     }
+
+    #[test]
+    fn pawn_jump() {
+	use crate::bitboard::Bitboard;
+        use crate::bitboard::Team;
+        use crate::board::BoardState;
+        use bitvec::prelude::Lsb0;
+        use bitvec::view::BitView;
+
+	let mut test_board = BoardState::from_fen(String::from("rnbqkb1r/pppppppp/6N1/8/6n1/8/PPPPPPPP/RNBQKB1R b KQkq - 0 1")).expect("Invalid FEN used in testing");
+
+        let moves = test_board.get_legal_moves();
+	
+	let can_jump_knight = moves[Bitboard::al_notation_to_bit_idx("g7").unwrap()].0.get_bit::<Lsb0>(Bitboard::al_notation_to_bit_idx("g5").unwrap());
+	assert!(!can_jump_knight, "Pawn is moving twice with a knight in the way")
+	
+    }
 }

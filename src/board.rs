@@ -104,11 +104,6 @@ impl Default for BoardState {
     }
 }
 
-pub trait PluckIf {
-    fn pluck_if()
-    
-    }
-}
 impl BoardState {
     /*
         Constructs a board state from a FEN string
@@ -469,9 +464,15 @@ impl BoardState {
                     PieceType::Pawn => {
                         let mut pre_computed_moves = get_precomputed_pawn(self, piece_obj);
 
-                        if pre_computed_moves.0.get_bit(index+8) == false {
-                            // Remove any move for +16
-                            pre_computed_moves.1.filter
+                        if pre_computed_moves.0.get_bit::<Lsb0>(index+8) == false {
+                            let _ = pre_computed_moves.1.extract_if(0..pre_computed_moves.1.len(), |pawn_move| {
+				pawn_move.target == index + 16 && pawn_move.start == index
+			    });
+                        }
+  			if pre_computed_moves.0.get_bit::<Lsb0>(index-8) == false {
+                            let _ = pre_computed_moves.1.extract_if(0..pre_computed_moves.1.len(), |pawn_move| {
+				pawn_move.target == index - 16 && pawn_move.start == index
+			    });
                         }
                         pre_computed_moves
                     },

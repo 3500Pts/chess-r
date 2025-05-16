@@ -181,7 +181,7 @@ impl Bitboard {
         }
     }
 
-    pub fn get_bit<Order: BitOrder>(&mut self, index: usize) -> bool {
+    pub fn get_bit<Order: BitOrder>(&self, index: usize) -> bool {
         let bit_slice = self.state.view_bits::<Order>();
 
         let bits = 64;
