@@ -496,6 +496,8 @@ impl BoardState {
                 if (castling_move == 0 || castling_move == 2)
                     && pl[king_square + 2] == PieceType::None
                     && pl[king_square + 1] == PieceType::None
+                    && !self.opponent_attacking_square(king_square+1)
+                    && !self.opponent_attacking_square(king_square+2)
                 {
                     bitboard
                         .state
@@ -511,6 +513,9 @@ impl BoardState {
                 } else if pl[king_square - 2] == PieceType::None
                     && pl[king_square - 1] == PieceType::None
                     && pl[king_square - 3] == PieceType::None
+                    && !self.opponent_attacking_square(king_square-1)
+                    && !self.opponent_attacking_square(king_square-2)
+                    && !self.opponent_attacking_square(king_square-3)
                 {
                     bitboard
                         .state
