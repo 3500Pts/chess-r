@@ -1,6 +1,8 @@
 mod tests {
     // Tests against all the rules
 
+    use crate::bitboard::Bitboard;
+
     #[test]
     fn en_passant() {
         use crate::Team;
@@ -106,7 +108,6 @@ mod tests {
     }
 
     #[test]
-
     // No castling in check
     fn check_castling() {
         use crate::Team;
@@ -122,8 +123,10 @@ mod tests {
         let ept = test_board.capture_bitboard[Team::White as usize]
             .state
             .view_bits::<Lsb0>()
-            .get(6)
-            .expect("Piece Bitboard did not extend to 25 bits")
+            .get(
+                Bitboard::al_notation_to_bit_idx("g1").unwrap()
+            )
+            .expect("Piece Bitboard did not extend to g1 bits")
             .then_some(1);
 
         println!("{}", test_board.capture_bitboard[Team::White as usize]);
@@ -201,5 +204,35 @@ mod tests {
             compare_board.as_fen(),
             "Unmaking one move created a different board state than the initial board"
         );
+    }
+
+    #[test]
+    fn dangerous_castle() {
+        use crate::bitboard::Bitboard;
+        use crate::board::BoardState;
+        use crate::bitboard::Team;
+        use bitvec::prelude::Lsb0;
+        use bitvec::view::BitView;  
+
+        // In this position Qh3 is watching f1, preventing a castle
+        let test_board = BoardState::from_fen(String::from(
+            "r3k2r/ppp2ppp/2np1n2/4p3/Pb6/6Pq/2PPPP1P/RNBQK2R w KQkq - 0 9",
+        ))
+        .expect("Invalid FEN used in testing");
+
+        let can_castle = test_board.capture_bitboard[Team::White as usize]
+            .state
+            .view_bits::<Lsb0>()
+            .get(
+                Bitboard::al_notation_to_bit_idx("g1").unwrap()
+            )
+            .expect("Piece Bitboard did not extend to 25 bits")
+            .then_some(1);
+
+        assert_eq!(
+            can_castle,
+            None,
+            "Kingside castled as white with f3 being targeted by queen"
+        )
     }
 }
