@@ -87,8 +87,14 @@ impl fmt::Display for Bitboard {
                     write!(
                         f,
                         "{string}{} ",
-                        bit.then(|| { if square_idx == 1 { "Z" } else { "X" } })
-                            .unwrap_or("O")
+                        bit.then(|| {
+                            if square_idx == 1 {
+                                "Z"
+                            } else {
+                                "X"
+                            }
+                        })
+                        .unwrap_or("O")
                     )?;
                 }
             }

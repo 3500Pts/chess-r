@@ -103,6 +103,12 @@ impl Default for BoardState {
         }
     }
 }
+
+pub trait PluckIf {
+    fn pluck_if()
+    
+    }
+}
 impl BoardState {
     /*
         Constructs a board state from a FEN string
@@ -229,7 +235,8 @@ impl BoardState {
                     if fen_part.contains("b") {
                         result_obj.active_team = Team::Black
                     } else if fen_part.contains("w") {
-                        result_obj.active_team = Team::White
+                        result_obj.active_team = Team::White;
+                        result_obj.ply_clock += 1;
                     } else {
                         return Err(FENErr::BadTeam);
                     }
@@ -270,7 +277,8 @@ impl BoardState {
                 }
                 6 => {
                     if let Ok(turn_clk) = fen_part.parse::<i64>() {
-                        result_obj.turn_clock = turn_clk
+                        result_obj.turn_clock = turn_clk;
+                        result_obj.ply_clock += turn_clk * 2;
                     } else {
                         return Err(FENErr::MalformedNumber);
                     }
@@ -458,11 +466,20 @@ impl BoardState {
                     }
                     PieceType::King => get_precomputed_king(self, piece_obj),
                     PieceType::Knight => get_precomputed_knight(self, piece_obj),
-                    PieceType::Pawn => get_precomputed_pawn(self, piece_obj),
+                    PieceType::Pawn => {
+                        let mut pre_computed_moves = get_precomputed_pawn(self, piece_obj);
+
+                        if pre_computed_moves.0.get_bit(index+8) == false {
+                            // Remove any move for +16
+                            pre_computed_moves.1.filter
+                        }
+                        pre_computed_moves
+                    },
                     _ => default_push,
                 };
 
                 move_list.push((psuedo_bitboard, psuedo_moves));
+
             } else {
                 move_list.push(default_push);
             }
@@ -496,8 +513,8 @@ impl BoardState {
                 if (castling_move == 0 || castling_move == 2)
                     && pl[king_square + 2] == PieceType::None
                     && pl[king_square + 1] == PieceType::None
-                    && !self.opponent_attacking_square(king_square+1)
-                    && !self.opponent_attacking_square(king_square+2)
+                    && !self.opponent_attacking_square(king_square + 1)
+                    && !self.opponent_attacking_square(king_square + 2)
                 {
                     bitboard
                         .state
@@ -513,9 +530,9 @@ impl BoardState {
                 } else if pl[king_square - 2] == PieceType::None
                     && pl[king_square - 1] == PieceType::None
                     && pl[king_square - 3] == PieceType::None
-                    && !self.opponent_attacking_square(king_square-1)
-                    && !self.opponent_attacking_square(king_square-2)
-                    && !self.opponent_attacking_square(king_square-3)
+                    && !self.opponent_attacking_square(king_square - 1)
+                    && !self.opponent_attacking_square(king_square - 2)
+                    && !self.opponent_attacking_square(king_square - 3)
                 {
                     bitboard
                         .state
@@ -759,7 +776,7 @@ impl BoardState {
                 String::from("-")
             }
         };
-        let half_move_clock = "0"; // TODO 
+        let half_move_clock = "0"; // TODO
         let full_move_clock = self.turn_clock;
         let active_color = if self.active_team == Team::White {
             "w"

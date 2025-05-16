@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use bitvec::order::Lsb0;
 use bitvec::view::BitView;
-use ggez::GameError;
 use ggez::audio::SoundSource;
 use ggez::audio::Source;
 use ggez::event;
@@ -19,15 +18,16 @@ use ggez::graphics::Transform;
 use ggez::graphics::{self, Color};
 use ggez::mint::Point2;
 use ggez::mint::Vector2;
+use ggez::GameError;
 use ggez::{Context, GameResult};
 
 use crate::bitboard::Bitboard;
-use crate::bitboard::PIECE_TYPE_ARRAY;
 use crate::bitboard::PieceType;
 use crate::bitboard::Team;
+use crate::bitboard::PIECE_TYPE_ARRAY;
 use crate::board::BoardState;
-use crate::r#move::Move;
 use crate::opponents::*;
+use crate::r#move::Move;
 use chrono::prelude::*;
 
 pub type ColorRGBA = [f32; 4];

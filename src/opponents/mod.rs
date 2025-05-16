@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use rand::{Rng, seq::IndexedRandom};
+use rand::{seq::IndexedRandom, Rng};
 
 use crate::{
     bitboard::{Bitboard, PieceType, Team},
@@ -432,6 +432,10 @@ impl MoveComputer for ChessOpponent {
             }
         };
 
-        if result.is_some() { result } else { None }
+        if result.is_some() {
+            result
+        } else {
+            None
+        }
     }
 }
