@@ -257,7 +257,7 @@ impl Bitboard {
     }
 }
 
-struct BitboardIterator {
+pub struct BitboardIterator {
     head: usize,
     board: Bitboard,
 }
