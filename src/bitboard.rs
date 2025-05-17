@@ -6,6 +6,11 @@ use std::{
 // bitboard.rs
 use bitvec::prelude::*;
 
+use crate::{
+    board::BoardState,
+    r#move::{Move, Piece},
+};
+
 #[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
 pub enum Team {
     White = 0,
@@ -193,5 +198,91 @@ impl Bitboard {
         }
 
         false
+    }
+
+    pub fn get_move_from_bit(
+        bitboard: &Bitboard,
+        enemy_bitboard: Bitboard,
+        friendly_bitboard: Bitboard,
+        square: usize,
+        attacking_piece: &Piece,
+        team: Team,
+        board_state: &BoardState,
+    ) -> Option<Move> {
+        if bitboard.get_bit::<Lsb0>(square) {
+            let capture = (enemy_bitboard & !friendly_bitboard).get_bit::<Lsb0>(square).then(|| {board_state.get_piece_at_pos(square).expect("Enemy bitboard should not have a positive bit where a piece does not exist")});
+            let start = attacking_piece.position;
+
+            return Some(Move {
+                start: start,
+                target: square,
+                captures: capture,
+                is_castle: attacking_piece.piece_type == PieceType::King
+                    && square.abs_diff(start) == 2,
+                is_pawn_double: attacking_piece.piece_type == PieceType::Pawn
+                    && square.abs_diff(start) == 16,
+            });
+        } else {
+            return None;
+        }
+    }
+    pub fn as_moves(
+        &self,
+        attacking_piece: &Piece,
+        team: Team,
+        board_state: &BoardState,
+    ) -> Vec<Move> {
+        // Create move objs from all parts of the board
+        let mut move_list: Vec<Move> = Vec::new();
+
+        let range_end: usize = 64;
+        let range_start: usize = 0;
+
+        let friendly_bitboard = board_state.get_team_coverage(team);
+        let enemy_bitboard = board_state.get_team_coverage(team.opponent());
+        for square in range_start..range_end {
+            if let Some(move_result) = Self::get_move_from_bit(
+                self,
+                enemy_bitboard,
+                friendly_bitboard,
+                square,
+                attacking_piece,
+                team,
+                board_state,
+            ) {
+                move_list.push(move_result)
+            }
+        }
+        move_list
+    }
+}
+
+struct BitboardIterator {
+    head: usize,
+    board: Bitboard,
+}
+impl Iterator for BitboardIterator {
+    type Item = bool;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.head += 1;
+
+        if self.head >= 64 {
+            return None;
+        } else {
+            return Some(self.board.get_bit::<Lsb0>(self.head));
+        }
+    }
+}
+impl IntoIterator for Bitboard {
+    type Item = bool;
+
+    type IntoIter = BitboardIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        return BitboardIterator {
+            head: 0,
+            board: self,
+        };
     }
 }
