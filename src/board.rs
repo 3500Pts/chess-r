@@ -2,6 +2,7 @@ use bitvec::{order::Lsb0, view::BitView};
 
 use crate::{
     bitboard::*,
+    opponents::ConvertToMoves,
     r#move::{Move, MoveError, Piece, *},
 };
 use std::{
@@ -70,7 +71,7 @@ pub struct BoardState {
     pub en_passant_square: Option<usize>,
     pub turn_clock: i64,
     pub ply_clock: i64,
-    pub active_team_checkmate: bool,
+    pub active_team_mate: bool,
     pub piece_list: [PieceType; 64],
     pub edge_compute: [[usize; 8]; 64],
     pub king_compute: [[Bitboard; 64]; 2],
@@ -91,7 +92,7 @@ impl Default for BoardState {
             turn_clock: 1,
             en_passant_square: None,
             en_passant_turn: None,
-            active_team_checkmate: false,
+            active_team_mate: false,
             piece_list: [PieceType::None; 64], // TODO: Make this compatible with any amount of squares/any size of map. Maybe as a type argument to the board state?
             edge_compute: compute_edges(),
             king_compute: precalc_king_attack::<64>(),
@@ -387,11 +388,12 @@ impl BoardState {
         self.piece_list[r#move.target] = moving_piece_type;
     }
     fn update_capture_bitboards(&mut self) {
+
         for team_id in 0..=Team::Black as usize {
-            let mut capture_bitboard = Bitboard::default();
             let legals = self.get_psuedolegal_moves();
 
-            for (square, (bitboard, _legal_moves)) in legals.iter().enumerate().take(64) {
+            let mut capture_bitboard = Bitboard::default();
+            for (square, bitboard) in legals.iter().enumerate().take(64) {
                 if self.get_square_team(square) as usize == team_id {
                     let piece_type = self.piece_list[square];
                     if piece_type == PieceType::Pawn {
@@ -402,6 +404,112 @@ impl BoardState {
                 }
             }
             self.capture_bitboard[team_id] = capture_bitboard;
+
+            let mut mutable_legals = legals.clone();
+            // update if this team is active and in mate as well (has no moves)
+            if self.active_team as usize == team_id {
+                if legals.len() > 0 {
+                    /*  Manually filter psuedolegal moves to avoid recursion
+                     let mut sounding_board = self.clone();
+
+                     let white_bitboard = self.get_team_coverage(Team::White);
+                     let black_bitboard = self.get_team_coverage(Team::Black);
+                    / mutable_legals
+                         .iter_mut()
+                         .enumerate()
+                         .for_each(|(attacker_square, bitboard_ref)| {
+                             let attacker_team = if white_bitboard.get_bit::<Lsb0>(attacker_square) {
+                                 Team::White
+                             } else {
+                                 Team::Black
+                             };
+
+                             if attacker_team != self.active_team {
+                                 return;
+                             }
+                             let enemy_bitboard = if attacker_team == Team::White {
+                                 black_bitboard
+                             } else {
+                                 white_bitboard
+                             };
+                             let friendly_bitboard = if attacker_team == Team::Black {
+                                 black_bitboard
+                             } else {
+                                 white_bitboard
+                             };
+
+                             let piece = self.get_piece_at_pos(attacker_square);
+                             if piece == None {
+                                 return;
+                             }
+                             let piece = piece.unwrap();
+                             for (target_square, _bit_state) in bitboard_ref.into_iter().enumerate()
+                             {
+                                 // does doing this leave you in check?
+                                 let found_move = Bitboard::get_move_from_bit(
+                                     bitboard_ref,
+                                     enemy_bitboard,
+                                     friendly_bitboard,
+                                     target_square,
+                                     &piece,
+                                     piece.team,
+                                     self,
+                                 );
+
+                                 if let Some(available_move) = found_move {
+                                     sounding_board.make_move_no_updates(available_move).unwrap();
+
+                                     // Manually update sounding board to avoid actual recursion
+                                     let after_move_legals = self.get_psuedolegal_moves();
+
+                                     for (square, bitboard) in legals.iter().enumerate().take(64) {
+                                         if self.get_square_team(square) as usize == team_id {
+                                             let piece_type = self.piece_list[square];
+                                             if piece_type == PieceType::Pawn {
+                                                 capture_bitboard |= *bitboard
+                                                     & !self.pawn_push_compute[team_id][square]
+                                             } else {
+                                                 capture_bitboard |= *bitboard;
+                                             }
+                                         }
+                                     }
+                                     if sounding_board.is_team_checked(attacker_team) {
+                                         bitboard_ref.set_bit::<Lsb0>(target_square, false);
+                                     }
+
+                                     // Clean up for use by other loops
+
+                                     sounding_board
+                                         .unmake_move_no_updates(available_move)
+                                         .unwrap();
+
+                                     for (square, bitboard) in legals.iter().enumerate().take(64) {
+                                         if self.get_square_team(square) as usize == team_id {
+                                             let piece_type = self.piece_list[square];
+                                             if piece_type == PieceType::Pawn {
+                                                 capture_bitboard |= *bitboard
+                                                     & !self.pawn_push_compute[team_id][square]
+                                             } else {
+                                                 capture_bitboard |= *bitboard;
+                                             }
+                                         }
+                                     }
+                                 }
+                             }
+                         });*/
+                    self.active_team_mate = self
+                        .filter_psuedo_legals(legals)
+                        .to_vec()
+                        .convert_to_moves_and_mask_atk_squares(
+                            self.get_team_coverage(self.active_team),
+                            self,
+                        )
+                        .len()
+                        == 0;
+                } else {
+                    self.active_team_mate = true
+                }
+            }
         }
     }
     pub fn render_piece_list(pl: Vec<PieceType>) {
@@ -429,7 +537,6 @@ impl BoardState {
                 );
             }
         }
-        println!();
     }
     pub fn get_team_coverage(&self, team: Team) -> Bitboard {
         let mut result = Bitboard::default();
@@ -438,16 +545,14 @@ impl BoardState {
             // Apply all the piece tables to the base bitboard
             result |= *piece_board
         }
-
         result
     }
-    pub fn get_psuedolegal_moves(&self) -> Vec<(Bitboard, Vec<Move>)> {
+
+    pub fn get_psuedolegal_moves(&self) -> Vec<Bitboard> {
         let pl = self.piece_list;
-        let mut move_list: Vec<(Bitboard, Vec<Move>)> = Vec::new(); // The bitboard is used for highlighting moves the selected square has
+        let mut move_list: Vec<Bitboard> = Vec::new(); // The bitboard is used for highlighting moves the selected square has
 
         pl.iter().enumerate().for_each(|(index, piece_type)| {
-            let default_push = (Bitboard::default(), vec![Move::default()]);
-
             let team = self.get_square_team(index);
             if team != Team::None {
                 let piece_obj = Piece {
@@ -455,7 +560,7 @@ impl BoardState {
                     position: index,
                     team,
                 };
-                let (psuedo_bitboard, psuedo_moves) = match piece_type {
+                let psuedo_bitboard = match piece_type {
                     PieceType::Bishop | PieceType::Rook | &PieceType::Queen => {
                         compute_slider(self, piece_obj)
                     }
@@ -464,25 +569,23 @@ impl BoardState {
                     PieceType::Pawn => {
                         let mut pre_computed_moves = get_precomputed_pawn(self, piece_obj);
 
-                        if pre_computed_moves.0.get_bit::<Lsb0>(index+8) == false {
-                            let _ = pre_computed_moves.1.extract_if(0..pre_computed_moves.1.len(), |pawn_move| {
-				pawn_move.target == index + 16 && pawn_move.start == index
-			    });
+                        if pre_computed_moves.get_bit::<Lsb0>(index + 8) == false {
+                            pre_computed_moves.set_bit::<Lsb0>(index + 16, false);
                         }
-  			if pre_computed_moves.0.get_bit::<Lsb0>(index-8) == false {
-                            let _ = pre_computed_moves.1.extract_if(0..pre_computed_moves.1.len(), |pawn_move| {
-				pawn_move.target == index - 16 && pawn_move.start == index
-			    });
+                        if pre_computed_moves.get_bit::<Lsb0>(index.checked_sub(8).unwrap_or(640))
+                            == false
+                        {
+                            pre_computed_moves
+                                .set_bit::<Lsb0>(index.checked_sub(16).unwrap_or(640), false);
                         }
                         pre_computed_moves
-                    },
-                    _ => default_push,
+                    }
+                    _ => unreachable!("Attempted to get move for non-existent piece at position {index} and alleged team {team:?}"),
                 };
 
-                move_list.push((psuedo_bitboard, psuedo_moves));
-
+                move_list.push(psuedo_bitboard);
             } else {
-                move_list.push(default_push);
+                move_list.push(Bitboard::default());
             }
         });
 
@@ -509,7 +612,7 @@ impl BoardState {
                 if self.piece_list[king_square] != PieceType::King {
                     continue;
                 };
-                let (bitboard, move_vec) = &mut move_list[king_square];
+                let bitboard = &mut move_list[king_square];
 
                 if (castling_move == 0 || castling_move == 2)
                     && pl[king_square + 2] == PieceType::None
@@ -517,17 +620,7 @@ impl BoardState {
                     && !self.opponent_attacking_square(king_square + 1)
                     && !self.opponent_attacking_square(king_square + 2)
                 {
-                    bitboard
-                        .state
-                        .view_bits_mut::<Lsb0>()
-                        .set(king_square + 2, true);
-                    move_vec.push(Move {
-                        start: king_square,
-                        target: king_square + 2,
-                        captures: None,
-                        is_pawn_double: false,
-                        is_castle: true,
-                    });
+                    bitboard.set_bit::<Lsb0>(king_square + 2, true);
                 } else if pl[king_square - 2] == PieceType::None
                     && pl[king_square - 1] == PieceType::None
                     && pl[king_square - 3] == PieceType::None
@@ -535,17 +628,7 @@ impl BoardState {
                     && !self.opponent_attacking_square(king_square - 2)
                     && !self.opponent_attacking_square(king_square - 3)
                 {
-                    bitboard
-                        .state
-                        .view_bits_mut::<Lsb0>()
-                        .set(king_square - 2, true);
-                    move_vec.push(Move {
-                        start: king_square,
-                        target: king_square - 2,
-                        captures: None,
-                        is_pawn_double: false,
-                        is_castle: true,
-                    });
+                    bitboard.set_bit::<Lsb0>(king_square - 2, true);
                 }
             }
         }
@@ -566,81 +649,96 @@ impl BoardState {
         }
     }
     pub fn is_team_checked(&self, team: Team) -> bool {
-        let enemy_capture_bitboard = self.capture_bitboard[Team::White as usize]
-            | self.capture_bitboard[Team::Black as usize];
+        let enemy_capture_bitboard = self.capture_bitboard[0] | self.capture_bitboard[1];
 
         let in_check =
             enemy_capture_bitboard & self.board_pieces[team as usize][PieceType::King as usize];
 
         in_check.state > 0
     }
-    pub fn get_legal_moves(&self) -> Vec<(Bitboard, Vec<Move>)> {
-        let pl_moves = self.get_psuedolegal_moves();
-        let mut legal_moves: Vec<(Bitboard, Vec<Move>)> = Vec::new();
+    fn filter_psuedo_legals(&self, pl_moves: Vec<Bitboard>) -> [Bitboard; 64] {
+        let mut legal_moves = [Bitboard::default(); 64];
 
         // This is a list of what moves are available from what square, let's cut that down by active team
-        for (mut bitboard, move_vector) in pl_moves {
+
+        let white_bitboard = self.get_team_coverage(Team::White);
+        let black_bitboard = self.get_team_coverage(Team::Black);
+        let mut testing_board = self.clone();
+        
+        let pre_move_capture_bitboards = self.capture_bitboard.clone();
+        for (attacker_square, bitboard) in pl_moves.iter().enumerate() {
+            let attacker_team = if white_bitboard.get_bit::<Lsb0>(attacker_square) {
+                Team::White
+            } else {
+                Team::Black
+            };
+            let enemy_bitboard = if attacker_team == Team::White {
+                black_bitboard
+            } else {
+                white_bitboard
+            };
+            let friendly_bitboard = if attacker_team == Team::Black {
+                black_bitboard
+            } else {
+                white_bitboard
+            };
+
+            let piece = self.get_piece_at_pos(attacker_square);
+            if piece == None {
+                continue;
+            }
+            let piece = piece.unwrap();
             // Check
-            let mut lm_vector: Vec<Move> = Vec::new();
+            let mut bb_clone = bitboard.clone();
+            for (target_square, _bit) in bb_clone.into_iter().enumerate() {
+                let found_move = Bitboard::get_move_from_bit(
+                    &bitboard,
+                    enemy_bitboard,
+                    friendly_bitboard,
+                    target_square,
+                    &piece,
+                    piece.team,
+                    self,
+                );
 
-            move_vector.iter().for_each(|available_move| {
-                let mut testing_board = *self; // EXPENSIVE? TODO: Decide whether or not to keep this
-                let team_moving = testing_board.get_square_team(available_move.start);
-                let move_att = testing_board.make_move(*available_move);
+                if let Some(available_move) = found_move {
+                    testing_board.make_move_no_updates(available_move).unwrap();
 
-                if move_att.is_ok() {
-                    if testing_board.is_team_checked(team_moving) {
-                        bitboard
-                            .state
-                            .view_bits_mut::<Lsb0>()
-                            .set(available_move.target, false);
-                    } else {
-                        lm_vector.push(*available_move);
+                    // Update captures
+                    let after_move_legals = testing_board.get_psuedolegal_moves();
+                    for team_id in 0..=Team::Black as usize {
+                        let mut capture_bitboard = Bitboard::default();
+                        for (square, bitboard) in after_move_legals.iter().enumerate().take(64) {
+                            if self.get_square_team(square) as usize == team_id {
+                                let piece_type = self.piece_list[square];
+                                if piece_type == PieceType::Pawn {
+                                    capture_bitboard |=
+                                        *bitboard & !self.pawn_push_compute[team_id][square]
+                                } else {
+                                    capture_bitboard |= *bitboard;
+                                }
+                            }
+                        }
                     }
+                    if testing_board.is_team_checked(attacker_team) {
+                        bb_clone.set_bit::<Lsb0>(target_square, false);
+                    }
+                    testing_board
+                        .unmake_move_no_updates(available_move)
+                        .unwrap();
+                    testing_board.capture_bitboard = pre_move_capture_bitboards.clone();
                 }
-            });
+            }
 
-            legal_moves.push((bitboard, lm_vector))
+            legal_moves[attacker_square] = bb_clone;
         }
 
         legal_moves
     }
-    pub fn prune_moves_for_team_mut(
-        &mut self,
-        move_list: Vec<(Bitboard, Vec<Move>)>,
-        team: Team,
-    ) -> Vec<Move> {
-        let mut pruned_list: Vec<Move> = Vec::new();
-        move_list.iter().for_each(|(_, move_vector)| {
-            move_vector.iter().for_each(|available_move| {
-                let team_moving = self.get_square_team(available_move.start);
-                if team_moving == team {
-                    pruned_list.push(*available_move);
-                }
-            })
-        });
+    pub fn get_legal_moves(&self) -> [Bitboard; 64] {
+        let pl_moves = self.get_psuedolegal_moves();
 
-        if pruned_list.is_empty() && self.is_team_checked(self.active_team) {
-            self.active_team_checkmate = true;
-        }
-        pruned_list
-    }
-    pub fn prune_moves_for_team(
-        &self,
-        move_list: Vec<(Bitboard, Vec<Move>)>,
-        team: Team,
-    ) -> Vec<Move> {
-        let mut pruned_list: Vec<Move> = Vec::new();
-        move_list.iter().for_each(|(_, move_vector)| {
-            move_vector.iter().for_each(|available_move| {
-                let team_moving = self.get_square_team(available_move.start);
-                if team_moving == team {
-                    pruned_list.push(*available_move);
-                }
-            })
-        });
-
-        pruned_list
+        self.filter_psuedo_legals(pl_moves)
     }
     pub fn get_square_team(&self, square_idx: usize) -> Team {
         let white_check = self.get_team_coverage(Team::White);
@@ -673,7 +771,8 @@ impl BoardState {
             }
         }
     }
-    pub fn make_move(&mut self, r#move: Move) -> Result<(), MoveError> {
+
+    fn make_move_no_updates(&mut self, r#move: Move) -> Result<(), MoveError> {
         // Update out of the target positions
         let moving_piece_type = self.piece_list[r#move.start];
         let square_team = self.get_square_team(r#move.start);
@@ -738,29 +837,35 @@ impl BoardState {
                     }
                 });
             }
-
-            self.en_passant_square = if r#move.is_pawn_double {
-                Some(r#move.target)
-            } else {
-                self.en_passant_square
-            };
-            self.en_passant_turn = Some(self.turn_clock);
-
-            // Crudely handle promotions by queening any pawns that finished
-
-            self.update_capture_bitboards();
-
-            if self.active_team == Team::Black {
-                self.active_team = Team::White;
-                self.turn_clock += 1;
-                self.en_passant_square = None;
-            } else {
-                self.active_team = Team::Black // TODO: Account for three turn order with red before white
-            }
-            self.ply_clock += 1;
         } else {
             return Err(MoveError::NoUnit);
         }
+
+        Ok(())
+    }
+    pub fn make_move(&mut self, r#move: Move) -> Result<(), MoveError> {
+        // Update out of the target positions
+        self.make_move_no_updates(r#move)?;
+
+        self.en_passant_square = if r#move.is_pawn_double {
+            Some(r#move.target)
+        } else {
+            self.en_passant_square
+        };
+        self.en_passant_turn = Some(self.turn_clock);
+
+        // Crudely handle promotions by queening any pawns that finished
+        if self.active_team == Team::Black {
+            self.active_team = Team::White;
+            self.turn_clock += 1;
+            self.en_passant_square = None;
+        } else {
+            self.active_team = Team::Black // TODO: Account for three turn order with red before white
+        }
+
+        self.update_capture_bitboards();
+
+        self.ply_clock += 1;
 
         Ok(())
     }
@@ -852,7 +957,7 @@ impl BoardState {
             "{piece_placement} {active_color} {castling_rights} {en_passant_square} {half_move_clock} {full_move_clock}"
         )
     }
-    pub fn unmake_move(&mut self, r#move: Move) -> Result<(), MoveError> {
+    fn unmake_move_no_updates(&mut self, r#move: Move) -> Result<(), MoveError> {
         let moving_piece_type = self.piece_list[r#move.target];
         let square_team = self.get_square_team(r#move.target);
         let target_team = self.get_square_team(r#move.start);
@@ -959,6 +1064,20 @@ impl BoardState {
         } else {
             return Err(MoveError::NoUnit);
         }
+
+        Ok(())
+    }
+    pub fn unmake_move(&mut self, r#move: Move) -> Result<(), MoveError> {
+        self.unmake_move_no_updates(r#move)?;
+        if self.active_team == Team::Black {
+            self.active_team = Team::White;
+        } else {
+            self.turn_clock -= 1;
+            self.en_passant_square = None;
+            self.active_team = Team::Black // TODO: Account for three turn order with red before white
+        }
+        self.ply_clock -= 1;
+        self.update_capture_bitboards();
 
         Ok(())
     }

@@ -1,15 +1,13 @@
 mod tests {
     // Tests against all the rules
 
-    use crate::bitboard::{Bitboard, PieceType};
-
     const WHITE_KING_POS: usize = 4;
 
     #[test]
     fn en_passant() {
+        use crate::bitboard::Bitboard;
         use crate::board::BoardState;
         use crate::r#move::Move;
-        use crate::Team;
         use bitvec::prelude::Lsb0;
         use bitvec::view::BitView;
         let mut test_board = BoardState::from_fen(String::from(
@@ -31,14 +29,8 @@ mod tests {
             })
             .unwrap();
         assert_eq!(
-            moves[Bitboard::al_notation_to_bit_idx("b4").unwrap()]
-                .0
-                .state
-                .view_bits::<Lsb0>()
-                .get(26)
-                .expect("Piece Bitboard did not extend to 25 bits")
-                .then_some(1),
-            Some(1),
+            moves[Bitboard::al_notation_to_bit_idx("b4").unwrap()].get_bit::<Lsb0>(26),
+            true,
             "En passant test failed"
         );
     }
@@ -46,6 +38,7 @@ mod tests {
     #[test]
     // Test that you can't en passant after the next turn
     fn en_passant_deferred() {
+        use crate::bitboard::Bitboard;
         use crate::board::BoardState;
         use crate::r#move::Move;
         use crate::Team;
@@ -68,17 +61,6 @@ mod tests {
                 is_castle: false,
             })
             .unwrap();
-
-        let ept = moves[Bitboard::al_notation_to_bit_idx("b4").unwrap()]
-            .0
-            .state
-            .view_bits::<Lsb0>()
-            .get(26)
-            .expect("Piece Bitboard did not extend to 25 bits")
-            .then_some(1);
-        if ept.is_none() {
-            panic!("Prerequisite test failed")
-        }
         // Black does bishop to a6 instead
         test_board
             .make_move(Move {
@@ -107,13 +89,8 @@ mod tests {
         // There is no other legal captures on the square besides en passant
         assert_eq!(
             moves_after_deferral[Bitboard::al_notation_to_bit_idx("b4").unwrap()]
-                .0
-                .state
-                .view_bits::<Lsb0>()
-                .get(26)
-                .expect("Piece Bitboard did not extend to 25 bits")
-                .then_some(1),
-            None,
+                .get_bit::<Lsb0>(26),
+            false,
             "En passant test failed - you can still capture after a turn"
         );
     }
@@ -121,10 +98,10 @@ mod tests {
     #[test]
     // No castling in check
     fn check_castling() {
+        use crate::bitboard::Bitboard;
         use crate::board::BoardState;
         use crate::Team;
         use bitvec::prelude::Lsb0;
-        use bitvec::view::BitView;
 
         let test_board = BoardState::from_fen(String::from(
             "rnb1kbnr/ppp2ppp/8/3p4/3pP3/3B1N2/PPP2qPP/RNBQK2R w KQkq - 0 1",
@@ -132,17 +109,12 @@ mod tests {
         .expect("Invalid FEN used in testing");
         let moves = test_board.get_legal_moves();
 
-        let can_castle = moves[WHITE_KING_POS]
-            .0
-            .state
-            .view_bits::<Lsb0>()
-            .get(Bitboard::al_notation_to_bit_idx("g1").unwrap())
-            .expect("Piece Bitboard did not extend to g1 bits")
-            .then_some(1);
+        let can_castle =
+            moves[WHITE_KING_POS].get_bit::<Lsb0>(Bitboard::al_notation_to_bit_idx("g1").unwrap());
 
         println!("{}", test_board.capture_bitboard[Team::White as usize]);
 
-        assert_eq!(can_castle, None, "Castled while in check");
+        assert_eq!(can_castle, false, "Castled while in check");
     }
 
     // Check
@@ -242,16 +214,11 @@ mod tests {
         .expect("Invalid FEN used in testing");
         let moves = test_board.get_legal_moves();
 
-        let can_castle = moves[WHITE_KING_POS]
-            .0
-            .state
-            .view_bits::<Lsb0>()
-            .get(Bitboard::al_notation_to_bit_idx("g1").unwrap())
-            .expect("Piece Bitboard did not extend to 25 bits")
-            .then_some(1);
+        let can_castle =
+            moves[WHITE_KING_POS].get_bit::<Lsb0>(Bitboard::al_notation_to_bit_idx("g1").unwrap());
 
         assert_eq!(
-            can_castle, None,
+            can_castle, false,
             "Kingside castled as white with f3 being targeted by queen"
         )
     }
@@ -272,55 +239,64 @@ mod tests {
 
         let moves = test_board.get_legal_moves();
 
-        let can_castle = moves[WHITE_KING_POS]
-            .0
-            .state
-            .view_bits::<Lsb0>()
-            .get(Bitboard::al_notation_to_bit_idx("g1").unwrap())
-            .expect("Piece Bitboard did not extend to g1 bits")
-            .then_some(1);
+        let can_castle =
+            moves[WHITE_KING_POS].get_bit::<Lsb0>(Bitboard::al_notation_to_bit_idx("g1").unwrap());
 
         assert_eq!(
-            can_castle,
-            Some(1),
+            can_castle, true,
             "Could not kingside castle with a clear path"
         )
     }
 
     #[test]
     fn checkmate() {
+        use crate::bitboard::Bitboard;
         use crate::board::BoardState;
         use crate::r#move::Move;
 
-        let mut test_board = BoardState::from_fen(String::from("K1n5/8/8/2q5/8/3k4/8/8 w - - 0 51")).expect("Invalid FEN used in testing");
-        test_board.make_move({
-            Move {
-                start: Bitboard::al_notation_to_bit_idx("c5").unwrap(),
-                target: Bitboard::al_notation_to_bit_idx("a7").unwrap(),
-                captures: None,
-                is_pawn_double: false,
-                is_castle: false
-            }
-        }).unwrap();
-        test_board.prune_moves_for_team_mut(test_board.get_psuedolegal_moves(), crate::bitboard::Team::White);
+        let mut test_board =
+            BoardState::from_fen(String::from("K1n5/8/8/2q5/8/3k4/8/8 b - - 0 51"))
+                .expect("Invalid FEN used in testing");
+        test_board
+            .make_move({
+                Move {
+                    start: Bitboard::al_notation_to_bit_idx("c5").unwrap(),
+                    target: Bitboard::al_notation_to_bit_idx("a7").unwrap(),
+                    captures: None,
+                    is_pawn_double: false,
+                    is_castle: false,
+                }
+            })
+            .unwrap();
+        // todo: check for mate
         println!("{test_board:?}");
-        assert!(test_board.active_team_checkmate, "BoardState did not calculate checkmate from position {}, which is mate for black", test_board.as_fen());
+        assert!(
+            test_board.active_team_mate && test_board.is_team_checked(test_board.active_team),
+            "BoardState did not calculate checkmate from position {}, which is mate for black",
+            test_board.as_fen()
+        );
     }
 
     #[test]
     fn pawn_jump() {
-	use crate::bitboard::Bitboard;
+        use crate::bitboard::Bitboard;
         use crate::bitboard::Team;
         use crate::board::BoardState;
         use bitvec::prelude::Lsb0;
         use bitvec::view::BitView;
 
-	let mut test_board = BoardState::from_fen(String::from("rnbqkb1r/pppppppp/6N1/8/6n1/8/PPPPPPPP/RNBQKB1R b KQkq - 0 1")).expect("Invalid FEN used in testing");
+        let mut test_board = BoardState::from_fen(String::from(
+            "rnbqkb1r/pppppppp/6N1/8/6n1/8/PPPPPPPP/RNBQKB1R b KQkq - 0 1",
+        ))
+        .expect("Invalid FEN used in testing");
 
         let moves = test_board.get_legal_moves();
-	
-	let can_jump_knight = moves[Bitboard::al_notation_to_bit_idx("g7").unwrap()].0.get_bit::<Lsb0>(Bitboard::al_notation_to_bit_idx("g5").unwrap());
-	assert!(!can_jump_knight, "Pawn is moving twice with a knight in the way")
-	
+
+        let can_jump_knight = moves[Bitboard::al_notation_to_bit_idx("g7").unwrap()]
+            .get_bit::<Lsb0>(Bitboard::al_notation_to_bit_idx("g5").unwrap());
+        assert!(
+            !can_jump_knight,
+            "Pawn is moving twice with a knight in the way"
+        )
     }
 }

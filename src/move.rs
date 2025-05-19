@@ -3,7 +3,7 @@ use std::{
     ops::{Add, Sub},
 };
 
-use bitvec::{order::Lsb0, slice::BitSlice, view::BitView};
+use bitvec::{order::Lsb0, view::BitView};
 
 use crate::{
     bitboard::{Bitboard, PieceType, Team},
@@ -122,7 +122,7 @@ pub fn precalc_pawn_push<const S: usize>() -> [[Bitboard; S]; 2] {
         let mut square_target: i32 = 0;
 
         for square_bb in &mut array[index] {
-            let rank_advance_diff: i32 = if (index == 0) {
+            let rank_advance_diff: i32 = if index == 0 {
                 S.isqrt() as i32
             } else {
                 -(S.isqrt() as i32)
@@ -130,7 +130,7 @@ pub fn precalc_pawn_push<const S: usize>() -> [[Bitboard; S]; 2] {
             let is_ranked_out = square_target.div_floor(rank_advance_diff.abs())
                 == rank_advance_diff.abs() - 1
                 || square_target.div_floor(rank_advance_diff.abs()) == 0;
-            let is_at_start = if (index == 0) {
+            let is_at_start = if index == 0 {
                 square_target.div_floor(8) == 1
             } else {
                 square_target.div_floor(8) == 6
@@ -156,7 +156,7 @@ pub fn precalc_knight_attack<const S: usize>() -> [Bitboard; S] {
 
     for square_bb in &mut array {
         for knight_square in knight_moves {
-            let target = (square_target + knight_square);
+            let target = square_target + knight_square;
             let target_file = target % 8;
             let valid_move = target_file.abs_diff(square_target % 8) <= 3;
 
@@ -172,16 +172,15 @@ pub fn precalc_king_attack<const S: usize>() -> [[Bitboard; S]; 2] {
         let mut square_target: i32 = 0;
 
         for square_bb in &mut array[index] {
-            let rank_advance_diff: i32 = if (index == 0) {
+            let rank_advance_diff: i32 = if index == 0 {
                 S.isqrt() as i32
             } else {
                 -(S.isqrt() as i32)
             };
 
-            let is_a_file = square_target % rank_advance_diff.abs() == 0;
-            let is_h_file = square_target % (rank_advance_diff.abs() - 1) == 0;
-
-            let bit_slice = square_bb.state.view_bits_mut::<Lsb0>();
+            let file = square_target % rank_advance_diff.abs();
+            let is_a_file = file == 0;
+            let is_h_file = file == 7;
 
             square_bb.set_bit::<Lsb0>((square_target + rank_advance_diff - 1) as usize, !is_a_file);
             square_bb.set_bit::<Lsb0>((square_target + rank_advance_diff + 1) as usize, !is_h_file);
@@ -218,7 +217,7 @@ fn psuedolegalize_move(
 /*
     Gets psuedolegal moves for the pawns.
 */
-pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
+pub fn compute_pawn(board: &BoardState, piece: Piece) -> Bitboard {
     let mut bitboard = Bitboard::default();
     let mut computed_moves: Vec<Move> = Vec::new();
     let forward_direction: i32 = match piece.team {
@@ -240,7 +239,7 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
     };
 
     if far_edge_dist == 0 {
-        return (bitboard, computed_moves); // Promotable
+        return bitboard; // Promotable
     }
 
     let mut offset_index = 0;
@@ -319,13 +318,13 @@ pub fn compute_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
         }
     }
 
-    (bitboard, computed_moves)
+    bitboard
 }
 
 /*
 Computes psuedolegals for rooks, queens, bishops, kings. Requires pre-computed edges.
 */
-pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
+pub fn compute_slider(board: &BoardState, piece: Piece) -> Bitboard {
     let index_start = if piece.piece_type == PieceType::Bishop {
         4
     } else {
@@ -407,12 +406,12 @@ pub fn compute_slider(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
             }
         }
     }
-    (bitboard, computed_moves)
+    bitboard
 }
 
 // For nightrider, we could do this recursively until we get 0 results
 // compute_knight
-pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
+pub fn compute_knight(board: &BoardState, piece: Piece) -> Bitboard {
     let knight_moves: [i32; 8] = [10, 17, -10, -17, 15, -15, 6, -6];
     let mut computed_moves: Vec<Move> = Vec::new();
     let mut bitboard = Bitboard::default();
@@ -445,36 +444,10 @@ pub fn compute_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>)
         );
     }
 
-    (bitboard, computed_moves)
+    bitboard
 }
 
-fn bitboard_to_movelist(board: &BoardState, piece: Piece, bitboard: Bitboard) -> Vec<Move> {
-    let mut computed_moves: Vec<Move> = Vec::new();
-
-    let bit_slice = bitboard.state.view_bits::<Lsb0>();
-    for index in bit_slice.iter_ones() {
-        let far_edge_dist_for_pawns = match piece.team {
-            Team::Black => board.edge_compute[piece.position][1],
-            Team::White => board.edge_compute[piece.position][0],
-            _ => {
-                unreachable!()
-            }
-        };
-
-        computed_moves.push(Move {
-            start: piece.position,
-            target: index,
-            captures: board.get_piece_at_pos(index),
-            is_pawn_double: far_edge_dist_for_pawns == 6
-                && piece.piece_type == PieceType::Pawn
-                && index.abs_diff(piece.position) == 16,
-            is_castle: false,
-        });
-    }
-
-    computed_moves
-}
-pub fn get_precomputed_king(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
+pub fn get_precomputed_king(board: &BoardState, piece: Piece) -> Bitboard {
     let mut bitboard = Bitboard::default();
 
     let team_cov = board.get_team_coverage(piece.team);
@@ -485,10 +458,10 @@ pub fn get_precomputed_king(board: &BoardState, piece: Piece) -> (Bitboard, Vec<
 
     bitboard |= king_bit & !team_cov & !cap_bits;
 
-    (bitboard, bitboard_to_movelist(board, piece, bitboard))
+    bitboard
 }
 
-pub fn get_precomputed_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
+pub fn get_precomputed_pawn(board: &BoardState, piece: Piece) -> Bitboard {
     let team_cov =
         board.get_team_coverage(piece.team) | board.get_team_coverage(piece.team.opponent());
     let enemy_cov = board.get_team_coverage(piece.team.opponent());
@@ -524,10 +497,10 @@ pub fn get_precomputed_pawn(board: &BoardState, piece: Piece) -> (Bitboard, Vec<
 
     let pawn_bits = push_attack | push_bit;
 
-    (pawn_bits, bitboard_to_movelist(board, piece, pawn_bits))
+    pawn_bits
 }
-pub fn get_precomputed_knight(board: &BoardState, piece: Piece) -> (Bitboard, Vec<Move>) {
+pub fn get_precomputed_knight(board: &BoardState, piece: Piece) -> Bitboard {
     let team_cov = board.get_team_coverage(piece.team);
     let knight_bits = board.knight_compute[piece.position] & !team_cov;
-    (knight_bits, bitboard_to_movelist(board, piece, knight_bits))
+    knight_bits
 }

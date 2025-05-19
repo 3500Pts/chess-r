@@ -232,7 +232,6 @@ impl Bitboard {
         team: Team,
         board_state: &BoardState,
     ) -> Vec<Move> {
-        // Create move objs from all parts of the board
         let mut move_list: Vec<Move> = Vec::new();
 
         let range_end: usize = 64;

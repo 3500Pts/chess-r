@@ -27,7 +27,7 @@ use ui::MainState;
 #[tokio::main]
 async fn main() {
     let player_team = if (random_range(0..=1)) == 0 {
-        Team::Black
+        Team::White
     } else {
         Team::White
     };

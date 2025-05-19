@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::process;
 use std::sync::mpsc::Receiver;
-use std::time::Duration;
 
 use bitvec::order::Lsb0;
 use bitvec::view::BitView;
@@ -57,7 +56,6 @@ pub fn color_lerp(left: Color, right: Color, t: f32) -> Color {
 #[derive(Clone, Copy)]
 pub struct MoveHistoryEntry {
     piece_type: PieceType,
-    team: Team,
     captures: bool,
     checks: bool,
     mate: bool,
@@ -70,8 +68,7 @@ impl MoveHistoryEntry {
         // TODO: Piece disambiguation
 
         let piece_id = match self.piece_type {
-            PieceType::None => "",
-            PieceType::Pawn => "",
+            PieceType::None | PieceType::Pawn => "",
             PieceType::Knight => "n",
             PieceType::Queen => "q",
             PieceType::King => "k",
@@ -82,6 +79,7 @@ impl MoveHistoryEntry {
 
         let capture_string = if self.captures { "x" } else { "" };
         let file_array = ["a", "b", "c", "d", "e", "f", "g", "h"];
+        let start_file = file_array[self.start % 8];
         let target_file = file_array[self.target % 8];
         let target_rank = (((self.target / 8) as i32) + 1).to_string();
         let append_string = if self.mate {
@@ -92,6 +90,11 @@ impl MoveHistoryEntry {
             ""
         };
 
+        let pawn_capture_start_file = if self.captures && self.piece_type == PieceType::Pawn {
+            start_file
+        } else {
+            ""
+        };
         if self.castle {
             let diff = self.target as i32 - self.start as i32;
             if diff < 0 {
@@ -100,7 +103,7 @@ impl MoveHistoryEntry {
                 return String::from("O-O");
             }
         }
-        format!("{piece_id}{capture_string}{target_file}{target_rank}{append_string}")
+        format!("{piece_id}{pawn_capture_start_file}{capture_string}{target_file}{target_rank}{append_string}")
     }
 }
 
@@ -112,7 +115,7 @@ pub struct MainState {
     pub queued_move: Option<Move>, // Moves are queued to the draw queue so nothing changes during drawing
     pub drag_x: Option<f32>,
     pub drag_y: Option<f32>,
-    pub board_legal_moves: Option<Vec<(Bitboard, Vec<Move>)>>,
+    pub board_legal_moves: Option<Vec<Bitboard>>,
     pub last_move_origin: Option<usize>,
     pub last_move_end: Option<usize>,
     pub player_team: Team,
@@ -146,7 +149,7 @@ impl MainState {
             move_history: Vec::new(),
             start_board: board_state,
         };
-        s.board_legal_moves = Some(s.board.get_legal_moves());
+        s.board_legal_moves = Some(s.board.get_legal_moves().to_vec());
         // Preload piece data for speed - pulling it every frame is slow as I learned the hard way
 
         let mut piece_ids: Vec<String> = Vec::new();
@@ -221,7 +224,7 @@ impl MainState {
             } else {
                 String::from("")
             };
-
+            // TODO: add extra characters for when theres a piece sharing a square target on the same file/rank
             pgn_header.push_str(&format!("{turn_string}{} ", move_data.to_string()));
         }
 
@@ -257,7 +260,6 @@ impl MainState {
                 } else if let Some(selected_square) = self.selected_square {
                     if let Some(pl_moves) = &self.board_legal_moves {
                         let status_on_bitboard = pl_moves[selected_square]
-                            .0
                             .state
                             .view_bits::<Lsb0>()
                             .get(square_number.min(63));
@@ -454,7 +456,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
         if self.opp_thread.is_none()
             && self.player_team != self.board.active_team
-            && !self.board.active_team_checkmate
+            && !self.board.active_team_mate
         {
             let (mv_tx, mv_rx) = std::sync::mpsc::channel();
             let mut opponent_clone = self.opponent;
@@ -482,10 +484,14 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 self.queued_move
             }
         } else {
-            let legal_moves = self.board.prune_moves_for_team(
-                self.board_legal_moves.clone().unwrap_or(vec![]),
-                self.board.active_team,
-            );
+            let legal_moves = self
+                .board_legal_moves
+                .clone()
+                .unwrap_or(vec![])
+                .convert_to_moves_and_mask_atk_squares(
+                    self.board.get_team_coverage(self.board.active_team),
+                    &self.board,
+                );
             if legal_moves.len() == 0 {
                 self.end_game();
                 process::exit(0);
@@ -551,11 +557,17 @@ impl event::EventHandler<ggez::GameError> for MainState {
                     self.queued_move = if self.player_team == self.board.active_team
                         && ss_team == self.player_team
                     {
-                        pl_moves[selected_square]
-                            .1
-                            .iter()
-                            .find(|fmove| fmove.target == target_square_idx)
-                            .copied()
+                        let selected_possible_piece = self.board.get_piece_at_pos(selected_square);
+
+                        if let Some(attacking_piece) = selected_possible_piece {
+                            pl_moves[selected_square]
+                                .as_moves(&attacking_piece, attacking_piece.team, &self.board)
+                                .iter()
+                                .find(|fmove| fmove.target == target_square_idx)
+                                .copied()
+                        } else {
+                            self.queued_move
+                        }
                     } else {
                         self.queued_move
                     };
@@ -578,21 +590,24 @@ impl event::EventHandler<ggez::GameError> for MainState {
             }
             if let Ok(()) = self.board.make_move(c_move) {
                 let moving_piece_type = self.board.piece_list[c_move.target];
-                let moving_piece_team = self.board.get_square_team(c_move.target);
+                //let moving_piece_team = self.board.get_square_team(c_move.target);
                 self.play_sound(ctx, "piece_move", 0.1)?;
                 self.last_move_origin = Some(c_move.start);
                 self.last_move_end = Some(c_move.target);
                 // Regenerate moves
-                self.board_legal_moves = Some(self.board.get_legal_moves());
-                let team_legal_moves_active = self.board.prune_moves_for_team(
-                    self.board_legal_moves.clone().unwrap(),
-                    self.board.active_team,
-                );
+                self.board_legal_moves = Some(self.board.get_legal_moves().to_vec());
+                let team_legal_moves_active = self
+                    .board_legal_moves
+                    .clone()
+                    .unwrap_or(vec![Bitboard::default(); 64])
+                    .convert_to_moves_and_mask_atk_squares(
+                        self.board.get_team_coverage(self.board.active_team),
+                        &self.board,
+                    );
                 let is_checked_active = self.board.is_team_checked(self.board.active_team);
 
                 self.move_history.push(MoveHistoryEntry {
                     piece_type: moving_piece_type,
-                    team: moving_piece_team,
                     checks: self.board.is_team_checked(self.board.active_team),
                     mate: team_legal_moves_active.is_empty() && is_checked_active,
                     captures: c_move.captures.is_some(),
